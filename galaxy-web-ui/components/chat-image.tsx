@@ -47,6 +47,14 @@ function getProxiedImageUrl(url: string): string {
   // 추가 처리: 'https://@' 패턴 수정
   normalizedUrl = normalizedUrl.replace(/(https?:\/\/)@/gi, '$1');
   
+  // 파일명만 있는 경우 Supabase URL 추가
+  if (!normalizedUrl.includes('/') && !normalizedUrl.match(/^https?:\/\//i)) {
+    normalizedUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${normalizedUrl}`;
+    if (DEBUG_IMAGE_LOADING) {
+      console.log('파일명만 있어 전체 URL 구성:', normalizedUrl);
+    }
+  }
+  
   // 추가: 프로토콜이 없는 URL에 https 추가
   if (!normalizedUrl.match(/^https?:\/\//i)) {
     normalizedUrl = `https://${normalizedUrl}`;

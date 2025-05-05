@@ -2,7 +2,7 @@
 
 import type { Attachment, UIMessage } from 'ai';
 import { useChat } from '@ai-sdk/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { ChatHeader } from '@/components/chat-header';
 import type { Vote } from '@/lib/db/schema';
@@ -17,7 +17,13 @@ import { getChatHistoryPaginationKey } from './sidebar-history';
 import { toast } from './toast';
 import type { Session } from 'next-auth';
 import { useSearchParams } from 'next/navigation';
+import type { ImageData } from '@/lib/ai';
 import { extractImagesFromText } from '@/lib/ai';
+
+// UIMessage에 이미지 배열을 추가한 인터페이스
+interface MessageWithImages extends UIMessage {
+  images?: ImageData[];
+}
 
 export function Chat({
   id,
@@ -59,6 +65,8 @@ export function Chat({
     }),
     onFinish: () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
+      // 메시지 응답이 완료된 후 이미지 추출 시도
+      processLastMessageForImages();
     },
     onError: (error) => {
       toast({
@@ -67,6 +75,47 @@ export function Chat({
       });
     },
   });
+
+  // 마지막 메시지에서 이미지를 추출하는 함수
+  const processLastMessageForImages = useCallback(() => {
+    if (messages.length === 0) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.role !== 'assistant' || !lastMessage.content) return;
+    
+    // 이미 이미지가 있으면 처리하지 않음
+    const lastMessageWithImages = lastMessage as MessageWithImages;
+    if (lastMessageWithImages.images && lastMessageWithImages.images.length > 0) {
+      console.log('메시지에 이미지가 이미 있음:', lastMessageWithImages.images.length);
+      return;
+    }
+    
+    // 이미지 추출 시도
+    try {
+      console.log('메시지에서 이미지 추출 시도');
+      const extractedImages = extractImagesFromText(lastMessage.content);
+      
+      if (extractedImages && extractedImages.length > 0) {
+        console.log('이미지 추출 성공:', extractedImages.length);
+        
+        // 이미지를 메시지에 추가
+        setMessages((prevMessages) => {
+          const updatedMessages = [...prevMessages];
+          const lastIndex = updatedMessages.length - 1;
+          
+          const updatedMessage = {
+            ...updatedMessages[lastIndex],
+            images: extractedImages
+          };
+          
+          updatedMessages[lastIndex] = updatedMessage;
+          return updatedMessages;
+        });
+      }
+    } catch (error) {
+      console.error('이미지 추출 중 오류:', error);
+    }
+  }, [messages, setMessages]);
 
   const searchParams = useSearchParams();
   const query = searchParams.get('query');
@@ -85,6 +134,34 @@ export function Chat({
     }
   }, [query, append, hasAppendedQuery, id]);
 
+  // 메시지 변경 시 자동으로 이미지 처리
+  useEffect(() => {
+    if ((status === 'ready' || status === 'error') && messages.length > 0) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage.role === 'assistant') {
+        // 메시지에 이미지 확인
+        const messageWithImages = lastMessage as MessageWithImages;
+        
+        console.log('마지막 AI 응답 확인:');
+        console.log('메시지 ID:', lastMessage.id);
+        console.log('내용 길이:', lastMessage.content?.length || 0);
+        
+        if (messageWithImages.images && messageWithImages.images.length > 0) {
+          console.log('이미지가 이미 있음:', messageWithImages.images.length);
+        } else if (lastMessage.content) {
+          // 이미지 패턴이 있는지 확인
+          const hasImagePattern = lastMessage.content.includes('[이미지');
+          const hasSupabaseUrl = lastMessage.content.includes('ywvoksfszaelkceectaa.supabase.co');
+          
+          if (hasImagePattern || hasSupabaseUrl) {
+            console.log('이미지 패턴 감지됨, 이미지 추출 시도');
+            processLastMessageForImages();
+          }
+        }
+      }
+    }
+  }, [messages, status, processLastMessageForImages]);
+
   const { data: votes } = useSWR<Array<Vote>>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
     fetcher,
@@ -92,83 +169,6 @@ export function Chat({
 
   const [attachments, setAttachments] = useState<Array<Attachment>>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
-
-  // 이미지 관련 디버깅 추가
-  useEffect(() => {
-    if (messages.length > 0) {
-      // 마지막 메시지 확인 (AI 응답)
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.role === 'assistant') {
-        console.log('마지막 AI 응답 확인:');
-        console.log('내용 길이:', lastMessage.content?.length || 0);
-        
-        // 이미지 확인
-        const lastMessageAny = lastMessage as any; // 타입 이슈 해결을 위한 as any 사용
-        if (lastMessageAny.images && lastMessageAny.images.length > 0) {
-          console.log('응답에 이미지 포함됨:', lastMessageAny.images.length);
-          console.log('첫 번째 이미지 URL:', lastMessageAny.images[0].url);
-        } else {
-          console.log('응답에 이미지 없음');
-        }
-        
-        // 내용에 이미지 패턴이 있는지 확인
-        if (lastMessage.content) {
-          const hasImagePattern = lastMessage.content.includes('[이미지');
-          console.log('응답 내용에 [이미지] 패턴 포함:', hasImagePattern);
-          
-          const hasSupabaseUrl = lastMessage.content.includes('ywvoksfszaelkceectaa.supabase.co');
-          console.log('응답 내용에 Supabase URL 포함:', hasSupabaseUrl);
-          
-          // 내용에 이미지 패턴이 있지만 이미지 배열에 없는 경우, 스트리밍이 끝난 후 추가 시도
-          if ((hasImagePattern || hasSupabaseUrl) && (!lastMessageAny.images || lastMessageAny.images.length === 0)) {
-            console.log('경고: 응답 내용에 이미지 패턴이 있지만 이미지 배열 없음');
-            
-            // 상태에 따라 이미지 추출 시점 제어 (스트리밍 종료 시에만)
-            if (status !== 'streaming') {
-              try {
-                // 메시지 완료 후 이미지 추출 시도 (스트리밍 완료 감지 시)
-                console.log('스트리밍 완료 감지됨: 이미지 추출 시도...');
-                
-                if (lastMessage.content) {
-                  const extractedImages = extractImagesFromText(lastMessage.content);
-                  
-                  if (extractedImages && extractedImages.length > 0) {
-                    console.log('이미지 추출 성공! 이미지 발견:', extractedImages.length);
-                    
-                    // 메시지에 이미지 배열 추가 또는 업데이트
-                    lastMessageAny.images = extractedImages;
-                    
-                    // 메시지 업데이트를 트리거하여 UI 갱신
-                    setMessages([...messages]);
-                    
-                    console.log('메시지 업데이트됨, 추출된 이미지:', extractedImages.length);
-                  } else {
-                    console.log('이미지 추출 실패: 이미지를 찾을 수 없음');
-                    
-                    // 최종 백업: 지연 추출 시도 (스트리밍 완료 후 약간의 시간 후)
-                    setTimeout(() => {
-                      console.log('지연 이미지 추출 시도...');
-                      
-                      const delayedImages = extractImagesFromText(lastMessage.content || '');
-                      if (delayedImages && delayedImages.length > 0) {
-                        console.log('지연 추출 성공:', delayedImages.length);
-                        lastMessageAny.images = delayedImages;
-                        setMessages([...messages]);
-                      }
-                    }, 800);
-                  }
-                }
-              } catch (error) {
-                console.error('이미지 추출 시도 중 오류:', error);
-              }
-            } else {
-              console.log('스트리밍 진행 중: 이미지 추출 대기...');
-            }
-          }
-        }
-      }
-    }
-  }, [messages, setMessages, status]);
 
   return (
     <>

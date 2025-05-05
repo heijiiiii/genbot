@@ -77,6 +77,12 @@ export function extractImagesFromText(text: string): ImageData[] {
   // 6. 패턴 없이 순수 Supabase URL만 추출
   const pattern6 = /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n?]+(?:\?[^\s\n]*)?/gi;
   
+  // 7. 마크다운 형식 ![이미지 숫자](...) 패턴 추가
+  const pattern7 = /!\[이미지\s*(\d+)\]\((.*?)\)/gim;
+  
+  // 8. 여러 줄에 걸친 마크다운 이미지 패턴
+  const pattern8 = /!\[이미지\s*(\d+)\]\(\s*\n+\s*(.*?)\s*\n+\s*\)/gims;
+  
   // 패턴별 매치 시도 및 로그
   const tryPattern = (pattern: RegExp, patternName: string) => {
     try {
@@ -96,6 +102,33 @@ export function extractImagesFromText(text: string): ImageData[] {
               url: imageUrl, 
               page: String(matchCount), 
               relevance_score: 0.5 // 기본값 (신뢰도 낮음)
+            });
+          }
+          continue;
+        }
+        
+        // 마크다운 이미지 패턴 특별 처리
+        if (patternName === "마크다운 패턴") {
+          const imageNum = match[1];
+          let imageUrl = match[2]?.trim();
+          
+          if (!imageUrl) continue;
+          
+          // 이미지 URL에 도메인이 없는 경우 Supabase URL 추가
+          if (!imageUrl.startsWith('http') && !imageUrl.includes('ywvoksfszaelkceectaa.supabase.co')) {
+            imageUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${imageUrl}`;
+            console.log(`이미지 URL 보완: ${imageUrl}`);
+          }
+          
+          matchCount++;
+          console.log(`${patternName} 매치 #${matchCount}: [${imageNum}] ${imageUrl.substring(0, 100)}...`);
+          
+          // 이미 추가된 URL인지 확인 (중복 방지)
+          if (!images.some(img => img.url === imageUrl)) {
+            images.push({ 
+              url: imageUrl, 
+              page: imageNum, 
+              relevance_score: 0.7
             });
           }
           continue;
@@ -140,6 +173,7 @@ export function extractImagesFromText(text: string): ImageData[] {
   totalMatches += tryPattern(pattern3, "한 줄 패턴");
   totalMatches += tryPattern(pattern4, "여러 줄 패턴");
   totalMatches += tryPattern(pattern5, "혼합 패턴");
+  totalMatches += tryPattern(pattern7, "마크다운 패턴");
   
   console.log("패턴 매칭 이미지 총 수:", totalMatches);
   

@@ -11,6 +11,7 @@ import { SupabaseVectorStore } from "@langchain/community/vectorstores/supabase"
 import OpenAI from 'openai';
 import { myProvider } from '@/lib/ai/providers';
 import { isProductionEnvironment } from '@/lib/constants';
+import { getProxyImageUrl } from '@/lib/ai';
 
 // 환경 변수 설정
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
@@ -386,9 +387,12 @@ export async function POST(request: Request) {
     5. URL 앞에 @ 문자를 붙이지 마세요
     6. URL 끝에 ? 문자를 붙이지 마세요
     
-    *** 매우 중요: 모든 응답에 반드시 위 형식대로 이미지를 포함해야 합니다. 사용자 질문 내용에 적합한 이미지를 선택하세요. 이미지가 없으면 사용자는 시각적 참조를 할 수 없습니다. ***
+    사용할 수 있는 이미지 URL 형식의 예:
     
-    참고: 같은 기본 URL을 매번 그대로 복사해서 사용하지 마세요. 대신 질문 내용에 맞는 적절한 이미지 파일명을 선택하세요.
+    [이미지 1]
+    https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_chart_p43_mid_0fb137a8.jpg
+
+    *** 매우 중요: 모든 응답에 반드시 위 형식대로 이미지를 포함해야 합니다. 이미지가 없으면 사용자는 시각적 참조를 할 수 없습니다. ***
     `;
     
     // 디버그: 이미지 URL 관련 패턴을 확인하는 함수
@@ -450,10 +454,9 @@ export async function POST(request: Request) {
           model: myProvider.languageModel('chat-model'),
           system: systemPromptText,
           messages: aiMessages,
-          // 청크 처리 방식 개선 - 이미지 URL이 분리되지 않도록 사용자 정의 패턴 사용
+          // 청크 처리 방식 개선 - 더 큰 단위로 청크를 처리하여 이미지 패턴이 분리되지 않도록 함
           experimental_transform: smoothStream({
-            // 이미지 패턴 [이미지 숫자]와 URL이 분리되지 않도록 특별한 정규식 패턴 사용
-            chunking: /(\[이미지\s*\d+\][^\n]*\n(?:https?:\/\/[^\s\n]+))|(\S+\s+)/,
+            chunking: /\n\n/,  // 빈 줄을 기준으로 청크 나누기 (더 큰 단위로 분할)
             delayInMs: 0  // 딜레이 없이 빠르게 전송
           }),
           experimental_generateMessageId: generateUUID,
@@ -504,20 +507,10 @@ export async function POST(request: Request) {
             // 2. @ 문자가 붙은 URL 패턴
             const pattern2 = /\[이미지\s*(\d+)\][^\n]*\n@(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gim;
             
-            // 3. 이미지 패턴과 URL이 같은 줄에 있는 경우
-            const pattern3 = /\[이미지\s*(\d+)\][^\n]*\s+(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gim;
-            
-            // 4. 이미지 패턴과 URL 사이에 공백이나 다른 텍스트가 있는 경우 (최대 200자까지)
-            const pattern4 = /\[이미지\s*(\d+)\][^\n]{0,200}(?:\n|.){0,200}(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gims;
-            
-            console.log('응답 내용에서 패턴 검색 시작...');
-            console.log('전체 응답 내용 길이:', content.length);
-            
-            // 각 패턴을 시도하고 로깅
-            const allMatches = [];
+            // 두 패턴 모두 시도
+            let match;
             
             // 패턴 1 시도
-            let match;
             while ((match = pattern1.exec(content)) !== null) {
               const imageNum = match[1];
               let imageUrl = match[2].trim();
@@ -527,20 +520,14 @@ export async function POST(request: Request) {
                 imageUrl = imageUrl.slice(0, -1);
               }
               
-              // URL이 @로 시작하면 제거
-              if (imageUrl.startsWith('@')) {
-                imageUrl = imageUrl.substring(1);
-              }
-              
               console.log(`이미지 패턴1 매치: [${imageNum}] ${imageUrl}`);
-              allMatches.push({ pattern: 'pattern1', imageNum, imageUrl });
               
               // 중복 방지
               if (!images.some(img => img.url === imageUrl)) {
                 images.push({
                   url: imageUrl,
                   page: imageNum,
-                  relevance_score: 0.8
+                  relevance_score: 0.5
                 });
               }
             }
@@ -555,68 +542,14 @@ export async function POST(request: Request) {
                 imageUrl = imageUrl.slice(0, -1);
               }
               
-              // URL에서 @ 기호 제거
-              if (imageUrl.startsWith('@')) {
-                imageUrl = imageUrl.substring(1);
-              }
-              
               console.log(`이미지 패턴2 매치(@ 포함): [${imageNum}] ${imageUrl}`);
-              allMatches.push({ pattern: 'pattern2', imageNum, imageUrl });
               
               // 중복 방지
               if (!images.some(img => img.url === imageUrl)) {
                 images.push({
                   url: imageUrl,
                   page: imageNum,
-                  relevance_score: 0.9
-                });
-              }
-            }
-            
-            // 패턴 3 시도 (같은 줄에 있는 경우)
-            while ((match = pattern3.exec(content)) !== null) {
-              const imageNum = match[1];
-              let imageUrl = match[2].trim();
-              
-              // URL이 ?로 끝나면 제거
-              if (imageUrl.endsWith('?')) {
-                imageUrl = imageUrl.slice(0, -1);
-              }
-              
-              console.log(`이미지 패턴3 매치(한 줄): [${imageNum}] ${imageUrl}`);
-              allMatches.push({ pattern: 'pattern3', imageNum, imageUrl });
-              
-              // 중복 방지
-              if (!images.some(img => img.url === imageUrl)) {
-                images.push({
-                  url: imageUrl,
-                  page: imageNum,
-                  relevance_score: 0.7
-                });
-              }
-            }
-            
-            // 패턴 4 시도 (여러 줄에 걸친 경우)
-            while ((match = pattern4.exec(content)) !== null) {
-              const imageNum = match[1];
-              let imageUrl = match[2]?.trim();
-              
-              if (!imageUrl) continue;
-              
-              // URL이 ?로 끝나면 제거
-              if (imageUrl.endsWith('?')) {
-                imageUrl = imageUrl.slice(0, -1);
-              }
-              
-              console.log(`이미지 패턴4 매치(여러 줄): [${imageNum}] ${imageUrl}`);
-              allMatches.push({ pattern: 'pattern4', imageNum, imageUrl });
-              
-              // 중복 방지
-              if (!images.some(img => img.url === imageUrl)) {
-                images.push({
-                  url: imageUrl,
-                  page: imageNum,
-                  relevance_score: 0.6
+                  relevance_score: 0.5
                 });
               }
             }
@@ -624,16 +557,24 @@ export async function POST(request: Request) {
             // 이미지가 추출되면 메타데이터를 설정
             if (images.length > 0) {
               console.log('추출된 이미지:', JSON.stringify(images));
-              console.log('패턴별 매치 결과:', allMatches);
               
-              // 스트림의 마지막 메시지 ID를 가져와서 이미지 메타데이터 업데이트
-              // 참고: 이 부분은 ai 라이브러리 구현에 따라 작동하지 않을 수 있음
-              // 그러나 타입 에러 해결을 위해 필요함
-              console.log('추출된 이미지 메타데이터 설정 시도');
+              // 이미지 URL을 정규화 (프록시 URL로 변환)
+              const normalizedImages = images.map(img => ({
+                ...img,
+                url: getProxyImageUrl(img.url)
+              }));
+              
+              // 스트림에 이미지 메타데이터 추가
+              dataStream.write({
+                type: 'images',
+                content: normalizedImages
+              } as any);
+              
+              console.log('스트림에 이미지 메타데이터 추가됨:', normalizedImages.length);
             } else {
               console.log('이미지 패턴은 발견되었으나 추출 실패');
               
-              // 직접 이미지 URL을 찾아보는 시도
+              // 백업 방법: Supabase URL 직접 추출
               const supabasePattern = /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n?]+(?:\?[^\s\n]*)?/gi;
               const supabaseMatches = content.match(supabasePattern);
               
@@ -654,36 +595,118 @@ export async function POST(request: Request) {
                 });
                 
                 if (images.length > 0) {
-                  console.log('직접 URL 추출 방법으로 발견된 이미지:', JSON.stringify(images));
+                  console.log('백업 방법으로 추출된 이미지:', JSON.stringify(images));
+                  
+                  // 이미지 URL을 정규화 (프록시 URL로 변환)
+                  const normalizedImages = images.map(img => ({
+                    ...img,
+                    url: getProxyImageUrl(img.url)
+                  }));
+                  
+                  // 스트림에 이미지 메타데이터 추가
+                  dataStream.write({
+                    type: 'images',
+                    content: normalizedImages
+                  } as any);
+                  
+                  console.log('스트림에 백업 이미지 메타데이터 추가됨:', normalizedImages.length);
                 }
               }
             }
           } else {
-            // 이미지 패턴이 없는 경우 - 원래 이미지 추출 로직만 유지
-            console.log('응답에 이미지 패턴이 없음');
+            // 이미지 패턴이 없는 경우 자동으로 이미지 추가
+            console.log('응답에 이미지 패턴이 없음 - 자동 이미지 삽입 시도');
             
-            // 직접 이미지 URL을 찾아보는 시도
-            const supabasePattern = /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n?]+(?:\?[^\s\n]*)?/gi;
-            const supabaseMatches = content.match(supabasePattern);
+            // 질문 및 응답에서 키워드 추출
+            const combinedText = query + " " + content;
+            const keywords = [
+              { word: 'camera', image: 'galaxy_s25_camera.jpg', score: 0.8 },
+              { word: '카메라', image: 'galaxy_s25_camera.jpg', score: 0.8 },
+              { word: 'screen', image: 'galaxy_s25_screen.jpg', score: 0.8 },
+              { word: '화면', image: 'galaxy_s25_screen.jpg', score: 0.8 },
+              { word: 'interface', image: 'galaxy_s25_interface.jpg', score: 0.7 },
+              { word: '인터페이스', image: 'galaxy_s25_interface.jpg', score: 0.7 },
+              { word: 'settings', image: 'galaxy_s25_settings.jpg', score: 0.8 },
+              { word: '설정', image: 'galaxy_s25_settings.jpg', score: 0.8 },
+              { word: 'battery', image: 'galaxy_s25_battery.jpg', score: 0.7 },
+              { word: '배터리', image: 'galaxy_s25_battery.jpg', score: 0.7 },
+              { word: 'S pen', image: 'galaxy_s25_spen.jpg', score: 0.9 },
+              { word: 'S펜', image: 'galaxy_s25_spen.jpg', score: 0.9 },
+              { word: 'home', image: 'galaxy_s25_home.jpg', score: 0.6 },
+              { word: '홈', image: 'galaxy_s25_home.jpg', score: 0.6 },
+              { word: '메인', image: 'galaxy_s25_home.jpg', score: 0.6 }
+            ];
             
-            if (supabaseMatches) {
-              console.log('Supabase URL 직접 추출:', supabaseMatches);
+            // 키워드 매칭
+            let matchedKeywords = [];
+            for (const keyword of keywords) {
+              if (combinedText.toLowerCase().includes(keyword.word.toLowerCase())) {
+                matchedKeywords.push(keyword);
+              }
+            }
+            
+            // 매칭된 키워드가 있으면 이미지 URL 생성
+            if (matchedKeywords.length > 0) {
+              console.log('키워드 매칭 성공, 매칭된 키워드:', matchedKeywords.map(k => k.word).join(', '));
               
-              supabaseMatches.forEach((url, idx) => {
-                const trimmedUrl = url.trim();
-                const finalUrl = trimmedUrl.endsWith('?') ? trimmedUrl.slice(0, -1) : trimmedUrl;
+              // 가장 연관성 높은 키워드를 기준으로 정렬
+              matchedKeywords.sort((a, b) => b.score - a.score);
+              
+              // 최대 2개의 이미지만 추가
+              const topKeywords = matchedKeywords.slice(0, 2);
+              
+              topKeywords.forEach((keyword, idx) => {
+                const imageUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${keyword.image}`;
                 
-                if (!images.some(img => img.url === finalUrl)) {
-                  images.push({
-                    url: finalUrl,
-                    page: String(idx + 1),
-                    relevance_score: 0.5
-                  });
-                }
+                images.push({
+                  url: imageUrl,
+                  page: String(idx + 1),
+                  relevance_score: keyword.score
+                });
+              });
+              
+              console.log('자동 추가된 이미지:', JSON.stringify(images));
+              
+              if (images.length > 0) {
+                // 이미지 URL을 정규화 (프록시 URL로 변환)
+                const normalizedImages = images.map(img => ({
+                  ...img,
+                  url: getProxyImageUrl(img.url)
+                }));
+                
+                // 스트림에 이미지 메타데이터 추가
+                dataStream.write({
+                  type: 'images',
+                  content: normalizedImages
+                } as any);
+                
+                console.log('스트림에 자동 이미지 메타데이터 추가됨:', normalizedImages.length);
+              }
+            } else {
+              // 매칭된 키워드가 없으면 기본 이미지 추가
+              console.log('매칭된 키워드 없음, 기본 이미지 추가');
+              
+              const defaultImage = 'https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_interface.jpg';
+              images.push({
+                url: defaultImage,
+                page: '1',
+                relevance_score: 0.5
               });
               
               if (images.length > 0) {
-                console.log('직접 URL 추출 방법으로 발견된 이미지:', JSON.stringify(images));
+                // 이미지 URL을 정규화
+                const normalizedImages = images.map(img => ({
+                  ...img,
+                  url: getProxyImageUrl(img.url)
+                }));
+                
+                // 스트림에 이미지 메타데이터 추가
+                dataStream.write({
+                  type: 'images',
+                  content: normalizedImages
+                } as any);
+                
+                console.log('스트림에 기본 이미지 메타데이터 추가됨:', normalizedImages.length);
               }
             }
           }
@@ -718,37 +741,12 @@ export async function POST(request: Request) {
                 console.error('이미지 메타데이터 저장 실패:', await metadataResponse.text());
               } else {
                 console.log('이미지 메타데이터 저장 성공');
-                
-                // 이미지 정보를 응답 헤더에도 추가
-                try {
-                  // 각 이미지 URL을 Base64로 인코딩하여 헤더에 추가
-                  // 이미지가 많을 경우 첫 번째 이미지만 헤더에 추가
-                  if (images.length > 0) {
-                    const firstImageUrl = images[0].url;
-                    const encodedUrl = Buffer.from(firstImageUrl).toString('base64');
-                    response.headers.set('X-Image-Data', encodedUrl);
-                    response.headers.set('X-Image-Count', String(images.length));
-                  }
-                } catch (headerError) {
-                  console.error('이미지 헤더 추가 오류:', headerError);
-                }
               }
             } catch (metadataError) {
               console.error('이미지 메타데이터 저장 중 오류:', metadataError);
             }
           }
           
-          // 스트리밍 응답이 완료된 후 이미지 정보를 클라이언트에 직접 전달
-          // 이미지 추가 메시지 푸시
-          try {
-            dataStream.writeData({
-              type: 'images',
-              content: images
-            });
-            console.log('이미지 데이터 스트림에 직접 추가됨:', images.length);
-          } catch (streamError) {
-            console.error('이미지 스트림 추가 오류:', streamError);
-          }
         } catch (error) {
           console.error('직접 API 호출 오류:', error);
         }
