@@ -119,20 +119,21 @@ export function Chat({
           const hasSupabaseUrl = lastMessage.content.includes('ywvoksfszaelkceectaa.supabase.co');
           console.log('응답 내용에 Supabase URL 포함:', hasSupabaseUrl);
           
-          // 내용에 이미지 패턴이 있지만 이미지 배열에 없는 경우
+          // 내용에 이미지 패턴이 있지만 이미지 배열에 없는 경우, 스트리밍이 끝난 후 추가 시도
           if ((hasImagePattern || hasSupabaseUrl) && (!lastMessageAny.images || lastMessageAny.images.length === 0)) {
             console.log('경고: 응답 내용에 이미지 패턴이 있지만 이미지 배열 없음');
             
-            try {
-              // 메시지 완료 후 이미지 추출 시도 (타이머 설정으로 스트리밍 완료 보장)
-              setTimeout(() => {
-                console.log('메시지 완료 후 이미지 추출 다시 시도...');
+            // 상태에 따라 이미지 추출 시점 제어 (스트리밍 종료 시에만)
+            if (status !== 'streaming') {
+              try {
+                // 메시지 완료 후 이미지 추출 시도 (스트리밍 완료 감지 시)
+                console.log('스트리밍 완료 감지됨: 이미지 추출 시도...');
                 
                 if (lastMessage.content) {
                   const extractedImages = extractImagesFromText(lastMessage.content);
                   
                   if (extractedImages && extractedImages.length > 0) {
-                    console.log('지연 추출 성공! 이미지 발견:', extractedImages.length);
+                    console.log('이미지 추출 성공! 이미지 발견:', extractedImages.length);
                     
                     // 메시지에 이미지 배열 추가 또는 업데이트
                     lastMessageAny.images = extractedImages;
@@ -140,20 +141,34 @@ export function Chat({
                     // 메시지 업데이트를 트리거하여 UI 갱신
                     setMessages([...messages]);
                     
-                    console.log('메시지 업데이트됨, 추출된 이미지:', extractedImages);
+                    console.log('메시지 업데이트됨, 추출된 이미지:', extractedImages.length);
                   } else {
-                    console.log('지연 추출 실패: 이미지를 찾을 수 없음');
+                    console.log('이미지 추출 실패: 이미지를 찾을 수 없음');
+                    
+                    // 최종 백업: 지연 추출 시도 (스트리밍 완료 후 약간의 시간 후)
+                    setTimeout(() => {
+                      console.log('지연 이미지 추출 시도...');
+                      
+                      const delayedImages = extractImagesFromText(lastMessage.content || '');
+                      if (delayedImages && delayedImages.length > 0) {
+                        console.log('지연 추출 성공:', delayedImages.length);
+                        lastMessageAny.images = delayedImages;
+                        setMessages([...messages]);
+                      }
+                    }, 800);
                   }
                 }
-              }, 500); // 스트리밍 완료 이후 약간의 지연 시간을 두고 추출
-            } catch (error) {
-              console.error('이미지 추출 시도 중 오류:', error);
+              } catch (error) {
+                console.error('이미지 추출 시도 중 오류:', error);
+              }
+            } else {
+              console.log('스트리밍 진행 중: 이미지 추출 대기...');
             }
           }
         }
       }
     }
-  }, [messages, setMessages]);
+  }, [messages, setMessages, status]);
 
   return (
     <>

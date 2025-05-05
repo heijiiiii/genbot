@@ -386,12 +386,9 @@ export async function POST(request: Request) {
     5. URL 앞에 @ 문자를 붙이지 마세요
     6. URL 끝에 ? 문자를 붙이지 마세요
     
-    사용할 수 있는 이미지 URL 형식의 예:
+    *** 매우 중요: 모든 응답에 반드시 위 형식대로 이미지를 포함해야 합니다. 사용자 질문 내용에 적합한 이미지를 선택하세요. 이미지가 없으면 사용자는 시각적 참조를 할 수 없습니다. ***
     
-    [이미지 1]
-    https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_chart_p43_mid_0fb137a8.jpg
-
-    *** 매우 중요: 모든 응답에 반드시 위 형식대로 이미지를 포함해야 합니다. 이미지가 없으면 사용자는 시각적 참조를 할 수 없습니다. ***
+    참고: 같은 기본 URL을 매번 그대로 복사해서 사용하지 마세요. 대신 질문 내용에 맞는 적절한 이미지 파일명을 선택하세요.
     `;
     
     // 디버그: 이미지 URL 관련 패턴을 확인하는 함수
@@ -636,7 +633,7 @@ export async function POST(request: Request) {
             } else {
               console.log('이미지 패턴은 발견되었으나 추출 실패');
               
-              // 백업 방법: Supabase URL 직접 추출
+              // 직접 이미지 URL을 찾아보는 시도
               const supabasePattern = /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n?]+(?:\?[^\s\n]*)?/gi;
               const supabaseMatches = content.match(supabasePattern);
               
@@ -657,76 +654,37 @@ export async function POST(request: Request) {
                 });
                 
                 if (images.length > 0) {
-                  console.log('백업 방법으로 추출된 이미지:', JSON.stringify(images));
+                  console.log('직접 URL 추출 방법으로 발견된 이미지:', JSON.stringify(images));
                 }
               }
             }
           } else {
-            // 이미지 패턴이 없는 경우 자동으로 이미지 추가
-            console.log('응답에 이미지 패턴이 없음 - 자동 이미지 삽입 시도');
+            // 이미지 패턴이 없는 경우 - 원래 이미지 추출 로직만 유지
+            console.log('응답에 이미지 패턴이 없음');
             
-            // 질문 및 응답에서 키워드 추출
-            const combinedText = query + " " + content;
-            const keywords = [
-              { word: 'camera', image: 'galaxy_s25_camera.jpg', score: 0.8 },
-              { word: '카메라', image: 'galaxy_s25_camera.jpg', score: 0.8 },
-              { word: 'screen', image: 'galaxy_s25_screen.jpg', score: 0.8 },
-              { word: '화면', image: 'galaxy_s25_screen.jpg', score: 0.8 },
-              { word: 'interface', image: 'galaxy_s25_interface.jpg', score: 0.7 },
-              { word: '인터페이스', image: 'galaxy_s25_interface.jpg', score: 0.7 },
-              { word: 'settings', image: 'galaxy_s25_settings.jpg', score: 0.8 },
-              { word: '설정', image: 'galaxy_s25_settings.jpg', score: 0.8 },
-              { word: 'battery', image: 'galaxy_s25_battery.jpg', score: 0.7 },
-              { word: '배터리', image: 'galaxy_s25_battery.jpg', score: 0.7 },
-              { word: 'S pen', image: 'galaxy_s25_spen.jpg', score: 0.9 },
-              { word: 'S펜', image: 'galaxy_s25_spen.jpg', score: 0.9 },
-              { word: 'home', image: 'galaxy_s25_home.jpg', score: 0.6 },
-              { word: '홈', image: 'galaxy_s25_home.jpg', score: 0.6 },
-              { word: '메인', image: 'galaxy_s25_home.jpg', score: 0.6 }
-            ];
+            // 직접 이미지 URL을 찾아보는 시도
+            const supabasePattern = /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n?]+(?:\?[^\s\n]*)?/gi;
+            const supabaseMatches = content.match(supabasePattern);
             
-            // 키워드 매칭
-            let matchedKeywords = [];
-            for (const keyword of keywords) {
-              if (combinedText.toLowerCase().includes(keyword.word.toLowerCase())) {
-                matchedKeywords.push(keyword);
-              }
-            }
-            
-            // 매칭된 키워드가 있으면 이미지 URL 생성
-            if (matchedKeywords.length > 0) {
-              console.log('키워드 매칭 성공, 매칭된 키워드:', matchedKeywords.map(k => k.word).join(', '));
+            if (supabaseMatches) {
+              console.log('Supabase URL 직접 추출:', supabaseMatches);
               
-              // 가장 연관성 높은 키워드를 기준으로 정렬
-              matchedKeywords.sort((a, b) => b.score - a.score);
-              
-              // 최대 2개의 이미지만 추가
-              const topKeywords = matchedKeywords.slice(0, 2);
-              
-              topKeywords.forEach((keyword, idx) => {
-                const imageUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${keyword.image}`;
+              supabaseMatches.forEach((url, idx) => {
+                const trimmedUrl = url.trim();
+                const finalUrl = trimmedUrl.endsWith('?') ? trimmedUrl.slice(0, -1) : trimmedUrl;
                 
-                images.push({
-                  url: imageUrl,
-                  page: String(idx + 1),
-                  relevance_score: keyword.score
-                });
+                if (!images.some(img => img.url === finalUrl)) {
+                  images.push({
+                    url: finalUrl,
+                    page: String(idx + 1),
+                    relevance_score: 0.5
+                  });
+                }
               });
               
-              console.log('자동 추가된 이미지:', JSON.stringify(images));
-              
-              // 이미지 정보를 응답에 저장하는 로직 필요 - 스트리밍 응답에는 추가하기 어려움
-              // 대신 client-side에서 수동으로 이미지를 표시하도록 설정
-            } else {
-              // 매칭된 키워드가 없으면 기본 이미지 추가
-              console.log('매칭된 키워드 없음, 기본 이미지 추가');
-              
-              const defaultImage = 'https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_interface.jpg';
-              images.push({
-                url: defaultImage,
-                page: '1',
-                relevance_score: 0.5
-              });
+              if (images.length > 0) {
+                console.log('직접 URL 추출 방법으로 발견된 이미지:', JSON.stringify(images));
+              }
             }
           }
           

@@ -150,9 +150,9 @@ const PurePreviewMessage = ({
       console.log('처리 전 텍스트 (일부):', text.substring(0, 200) + '...');
     }
     
-    // 이미지 추출 패턴 - 더 유연한 패턴으로 개선
+    // 간소화된 이미지 추출 패턴
     const patterns = [
-      // 1. 기본 패턴: [이미지 숫자] 다음 줄에 URL - 더 유연하게 개선
+      // 1. 기본 패턴: [이미지 숫자] 다음 줄에 URL
       /\[이미지\s*(\d+)\][^\n]*\n(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gim,
       
       // 2. @ 문자가 붙은 URL 패턴
@@ -161,20 +161,11 @@ const PurePreviewMessage = ({
       // 3. 이미지 패턴과 URL이 같은 줄에 있는 경우
       /\[이미지\s*(\d+)\][^\n]*\s+(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gim,
       
-      // 4. 단순 Supabase URL 추출
+      // 4. 단순 Supabase URL 추출 (백업)
       /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n?]+(?:\?[^\s\n]*)?/gi,
       
-      // 5. 이미지 패턴과 URL 사이에 공백이나 다른 텍스트가 있는 경우 (최대 200자까지)
-      /\[이미지\s*(\d+)\][^\n]{0,200}(?:\n|.){0,200}(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gims,
-      
-      // 6. URL 먼저 나오고 이미지 패턴이 뒤에 나오는 경우 (최대 100자 범위)
-      /(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)(?:.|\n){0,100}\[이미지\s*(\d+)\]/gims,
-      
-      // 7. 새 패턴: 스트리밍으로 인해 분리된 이미지 태그와 URL 처리 (1~2단어 사이에 분리된 경우)
-      /\[이미지\s*(\d+)\](?:(?!\[이미지)[\s\S]){1,50}(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gim,
-      
-      // 8. 갤럭시 S25 이미지 자동 매칭 (S펜 관련)
-      /S[ -]?(?:펜|pen|Pen|PEN).*?(?:사용|설정|해제|분리|기능)/i
+      // 5. 스트리밍으로 인해 분리된 이미지 태그와 URL 처리
+      /\[이미지\s*(\d+)\](?:(?!\[이미지)[\s\S]){1,50}(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gim
     ];
     
     // 각 패턴 시도
@@ -183,27 +174,6 @@ const PurePreviewMessage = ({
     // 패턴별 처리를 위한 함수
     const processPattern = (pattern: RegExp, patternIndex: number) => {
       try {
-        // S펜 관련 특수 패턴 (패턴 8)
-        if (patternIndex === 7) {
-          if (pattern.test(text)) {
-            console.log('S펜 관련 패턴 매치됨, 이미지 자동 추가');
-            
-            // S펜 이미지 URL
-            const spenImageUrl = 'https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_spen.jpg';
-            
-            // 중복 방지
-            if (!images.some(img => img.url === spenImageUrl)) {
-              images.push({
-                url: spenImageUrl,
-                page: '1',
-                relevance_score: 0.95
-              });
-              totalMatches++;
-            }
-          }
-          return;
-        }
-        
         // 단순 URL 패턴 (패턴 4)
         if (patternIndex === 3) {
           const matches = text.match(pattern);
@@ -224,32 +194,7 @@ const PurePreviewMessage = ({
           return;
         }
         
-        // URL 먼저, 이미지 패턴 뒤 (패턴 6)
-        if (patternIndex === 5) {
-          let match;
-          while ((match = pattern.exec(text)) !== null) {
-            totalMatches++;
-            const imageUrl = match[1]?.trim();
-            let imageNum = match[2] || '1';
-            
-            if (!imageUrl) continue;
-            
-            // URL이 ?로 끝나면 제거
-            const finalUrl = imageUrl.endsWith('?') ? imageUrl.slice(0, -1) : imageUrl;
-            
-            // 이미 추가된 URL인지 확인 (중복 방지)
-            if (!images.some(img => img.url === finalUrl)) {
-              images.push({
-                url: finalUrl,
-                page: imageNum,
-                relevance_score: 0.6
-              });
-            }
-          }
-          return;
-        }
-        
-        // 일반 이미지 패턴 (패턴 1-3, 5, 7)
+        // 일반 이미지 패턴 (패턴 1-3, 5)
         let match;
         while ((match = pattern.exec(text)) !== null) {
           totalMatches++;
