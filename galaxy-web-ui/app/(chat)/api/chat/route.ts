@@ -12,6 +12,10 @@ import OpenAI from 'openai';
 import { myProvider } from '@/lib/ai/providers';
 import { isProductionEnvironment } from '@/lib/constants';
 import { getProxyImageUrl, extractImagesFromText, type ImageData } from '@/lib/ai';
+import { API_BASE_URL } from '@/lib/constants';
+
+// 렌더 백엔드 서버 URL
+const RENDER_BACKEND_URL = 'https://galaxy-rag-chatbot.onrender.com';
 
 // 환경 변수 설정
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
@@ -408,13 +412,62 @@ export async function POST(request: Request) {
     // 갤럭시 챗봇 검색 로직 적용
     const searchContext = await searchDocuments(query);
     
-    // 시스템 프롬프트 설정 - 간소화된 버전
+    // 시스템 프롬프트 설정
     const systemPromptText = `
     당신은 삼성 갤럭시 S25의 친절하고 도움이 되는 가상 도우미입니다. 
     사용자의 질문에 대해 상세하고 유용한 정보를 제공하며, 필요한 경우 단계별 안내를 해주세요.
-    
+    기술적인 정보뿐만 아니라 실제 사용자가 이해하기 쉽고 도움이 되는 조언도 함께 제공해 주세요.
+    친근하고 대화하듯 답변하되, 정확한 정보를 제공하는 것이 가장 중요합니다.
+
     참고할 정보는 다음과 같습니다:
     ${searchContext}
+    
+    === 중요: 이미지 URL 포함 방법 ===
+    이미지가 필요한 경우 반드시 아래 형식을 정확히 따라주세요:
+    
+    [이미지 1]
+    https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_[type]_p[page]_[position]_[hash].jpg
+
+    여기서:
+    - [type]: 이미지 유형 (사용 가능한 타입: chart, figure만 허용됨)
+    - [page]: 페이지 번호 (숫자)
+    - [position]: 이미지 위치 (top, mid, bot)
+    - [hash]: 고유 식별자 (16진수 해시)
+
+    *** 중요: 관련 내용에 대한 이미지가 있을 경우 포함해주세요. 모든 응답에 이미지가 필요한 것은 아닙니다. ***
+    *** 중요: 유효한 이미지 타입은 chart와 figure만 사용 가능합니다. screen이나 diagram 등 다른 타입은 사용하지 마세요. ***
+    
+    사용 가능한 실제 이미지 목록 (실제 존재하는 파일만 사용하세요):
+    galaxy_s25_figure_p5_mid_66ed6d2a.jpg
+    galaxy_s25_figure_p87_mid_2fbf3d6e.jpg
+    galaxy_s25_figure_p72_mid_a816e8bc.jpg
+    galaxy_s25_figure_p91_mid_f5f60248.jpg
+    galaxy_s25_figure_p56_mid_6e381743.jpg
+    galaxy_s25_figure_p9_mid_b9ae8b72.jpg
+    galaxy_s25_chart_p44_bot_c831a541.jpg
+    galaxy_s25_figure_p11_mid_0dbbd981.jpg
+    galaxy_s25_figure_p44_mid_8fee8dc1.jpg
+    galaxy_s25_figure_p46_mid_604a76d4.jpg
+    galaxy_s25_figure_p85_bot_79a4e6d5.jpg
+    galaxy_s25_figure_p27_bot_284e581e.jpg
+    galaxy_s25_figure_p74_mid_c2913726.jpg
+    galaxy_s25_figure_p135_mid_705fc78a.jpg
+    galaxy_s25_figure_p110_mid_18747ac9.jpg
+    galaxy_s25_figure_p30_mid_f93b057b.jpg
+    galaxy_s25_figure_p66_mid_f180ba24.jpg
+    galaxy_s25_figure_p7_mid_e3dee85a.jpg
+    galaxy_s25_figure_p84_mid_e48bdada.jpg
+    galaxy_s25_figure_p71_mid_0a105f98.jpg
+    galaxy_s25_chart_p79_mid_6112d671.jpg
+    galaxy_s25_chart_p43_mid_0fb137a8.jpg
+    galaxy_s25_figure_p14_mid_de9837a9.jpg
+    galaxy_s25_figure_p24_mid_72dfd867.jpg
+    galaxy_s25_chart_p92_mid_648f80d3.jpg
+    galaxy_s25_figure_p63_mid_09b84c91.jpg
+    galaxy_s25_figure_p6_mid_4fcab36d.jpg
+    galaxy_s25_figure_p73_mid_66e59639.jpg
+    galaxy_s25_figure_p118_mid_bb0b15b4.jpg
+    galaxy_s25_figure_p4_mid_de795101.jpg
     `;
     
     // 스트리밍 응답 생성
@@ -456,27 +509,137 @@ export async function POST(request: Request) {
         // 응답 로깅
         console.log('응답 데이터 스트림 병합됨 - 이미지 URL 전송 확인 필요');
         
-        // 스트리밍이 완료되면 메시지 저장
-        if (newChatId) {
-          try {
-            // 응답 텍스트 추출 (스트리밍 응답에서는 직접 접근 불가능)
-            // 대신 응답 완료 후 채팅 저장 시 필요한 내용만 처리
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/chat`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                chatId: newChatId,
-                content: `[시스템 응답: ${new Date().toISOString()}]`,
-                metadata: { isStreamResponse: true }
-              }),
-            });
+        // OpenAI 직접 호출은 주석 처리하고 Render 백엔드 방식 사용
+        /*
+        // 스트리밍 응답 후에 별도로 직접 API 호출로 응답 확인 (이미지 URL 처리용)
+        try {
+          const completion = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+              { role: "system", content: systemPromptText },
+              { role: "user", content: query }
+            ],
+          });
+          
+          const fullContent = completion.choices[0]?.message?.content || '';
+          console.log('직접 API 호출 응답 길이:', fullContent.length);
+          
+          // 이미지 패턴 확인
+          const hasImagePattern = fullContent.includes('[이미지');
+          const hasSupabaseUrl = fullContent.includes('ywvoksfszaelkceectaa.supabase.co');
+          
+          console.log('응답에 이미지 패턴 포함:', hasImagePattern);
+          console.log('응답에 Supabase URL 포함:', hasSupabaseUrl);
+          
+          // 이미지 메타데이터를 스트림으로 전송하지 않고 프론트엔드에서 처리하도록 함
+          // 프론트엔드에서는 텍스트에서 이미지 패턴을 추출하여 표시
+          
+          // 이미지가 있는 경우 로깅만 수행
+          if (hasImagePattern || hasSupabaseUrl) {
+            console.log('응답에 이미지 패턴이 있음 - 프론트엔드에서 처리 예정');
             
-            console.log('메시지 저장 성공');
-          } catch (saveError) {
-            console.error('메시지 저장 중 오류:', saveError);
+            try {
+              const images = extractImagesFromText(fullContent);
+              if (images && images.length > 0) {
+                console.log('이미지 추출 성공 (백엔드):', images.length);
+                
+                // 이미지 정보 메타데이터에 추가
+                await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/chat`, {
+                  method: 'PUT',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    chatId: newChatId,
+                    content: `[시스템 응답: ${new Date().toISOString()}]`,
+                    metadata: { 
+                      isStreamResponse: true,
+                      images: images 
+                    }
+                  }),
+                });
+                
+                console.log('이미지 정보가 포함된 메시지 저장 성공');
+              }
+            } catch (error) {
+              console.error('이미지 추출 중 오류 (백엔드):', error);
+            }
           }
+          
+          // 메시지 저장은 이미지 없이 텍스트만 저장
+          if (newChatId) {
+            try {
+              // 응답 메시지 저장
+              const messageResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/chat`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  chatId: newChatId,
+                  content: fullContent
+                }),
+              });
+              
+              if (!messageResponse.ok) {
+                console.error('메시지 저장 실패:', await messageResponse.text());
+              } else {
+                console.log('메시지 저장 성공');
+              }
+            } catch (saveError) {
+              console.error('메시지 저장 중 오류:', saveError);
+            }
+          }
+          
+        } catch (error) {
+          console.error('직접 API 호출 오류:', error);
+        }
+        */
+
+        // 백엔드에서 이미지 정보 가져오기
+        try {
+          // 백엔드에서 이미지 정보 가져오기 시도
+          const imageInfoResponse = await fetch(`${RENDER_BACKEND_URL}/image-search`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query }),
+          });
+          
+          if (imageInfoResponse.ok) {
+            const imageData = await imageInfoResponse.json();
+            
+            // 이미지 정보가 있으면 로깅
+            if (imageData && imageData.images && imageData.images.length > 0) {
+              console.log('백엔드에서 이미지 정보 가져옴:', imageData.images.length);
+              
+              // 이미지 정보 메타데이터에 추가
+              await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/chat`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  chatId: newChatId,
+                  content: `[시스템 응답: ${new Date().toISOString()}]`,
+                  metadata: { 
+                    isStreamResponse: true,
+                    images: imageData.images 
+                  }
+                }),
+              });
+              
+              console.log('이미지 정보가 포함된 메시지 저장 성공');
+            } else {
+              console.log('백엔드에서 이미지 정보를 제공하지 않음');
+            }
+          } else {
+            console.error('백엔드 이미지 검색 응답 오류:', await imageInfoResponse.text());
+          }
+        } catch (imageError) {
+          console.error('이미지 정보 가져오기 오류:', imageError);
+          // 이미지 정보 가져오기 실패해도 메인 응답은 계속 진행
         }
       },
       onError: (error) => {
