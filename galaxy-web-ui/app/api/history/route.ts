@@ -6,8 +6,24 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://ywvoksfszaelkceectaa.supabase.co";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dm9rc2ZzemFlbGtjZWVjdGFhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NTU0ODUyMCwiZXhwIjoyMDYxMTI0NTIwfQ.KBkf30JIVTc-k0ysyZ_Fen1prSkNZe-p4c2nL6T37hE";
 
-// Supabase 클라이언트 설정
-const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+// Supabase 클라이언트 설정 (IPv4만 사용하도록 강제)
+const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    persistSession: true,
+  },
+  global: {
+    fetch: (url, options) => {
+      return fetch(url, {
+        ...options,
+        // IPv4만 사용하도록 강제
+        headers: {
+          ...options?.headers,
+          'Family-Preference': 'IPv4',
+        }
+      });
+    }
+  }
+});
 
 // UUID 형식 검증 함수
 const isValidUUID = (uuid: string): boolean => {
@@ -22,24 +38,79 @@ const KNOWN_USER_IDS = [
   "00000000-0000-0000-0000-000000000001"
 ];
 
-// 사용자 ID 매핑 확인 함수
-const getUserIdMapping = async (nextAuthId: string) => {
-  // 1. 매핑 테이블에서 먼저 확인
-  const { data: mapping, error: mappingError } = await client
-    .from('user_mappings')
-    .select('supabase_id')
-    .eq('next_auth_id', nextAuthId)
-    .single();
+// 사용자 ID 매핑 확인 함수 - chat_id 파라미터 추가
+const getUserIdMapping = async (nextAuthId: string, chatId?: string) => {
+  try {
+    // 특정 채팅 ID에 대한 매핑이 있는지 확인
+    if (chatId) {
+      const { data: chatMapping, error: chatMappingError } = await client
+        .from('user_mappings')
+        .select('supabase_id')
+        .eq('next_auth_id', nextAuthId)
+        .eq('chat_id', chatId)
+        .single();
+      
+      if (!chatMappingError && chatMapping && chatMapping.supabase_id) {
+        console.log(`채팅 ID ${chatId}에 대한 매핑 발견: ${nextAuthId} -> ${chatMapping.supabase_id}`);
+        return chatMapping.supabase_id;
+      }
+    }
+    
+    // 기본 매핑 확인 (chat_id가 NULL)
+    const { data: mapping, error: mappingError } = await client
+      .from('user_mappings')
+      .select('supabase_id')
+      .eq('next_auth_id', nextAuthId)
+      .is('chat_id', null)
+      .single();
 
-  if (!mappingError && mapping && mapping.supabase_id) {
-    console.log(`매핑 테이블에서 ID 찾음: ${nextAuthId} -> ${mapping.supabase_id}`);
-    return mapping.supabase_id;
+    if (!mappingError && mapping && mapping.supabase_id) {
+      console.log(`매핑 테이블에서 ID 찾음: ${nextAuthId} -> ${mapping.supabase_id}`);
+      return mapping.supabase_id;
+    }
+
+    // 매핑이 없으면 기본 ID 목록 사용
+    console.log(`매핑 테이블에서 ID를 찾지 못함: ${nextAuthId}. 기본 ID 목록 사용`);
+    const allPossibleIds = [nextAuthId, ...KNOWN_USER_IDS];
+    return allPossibleIds;
+  } catch (error) {
+    console.error("ID 매핑 조회 중 오류:", error);
+    // 오류 발생 시 기본 ID 목록 반환
+    return [nextAuthId, ...KNOWN_USER_IDS];
   }
+};
 
-  // 2. 매핑이 없으면 기본 ID 목록 사용
-  console.log(`매핑 테이블에서 ID를 찾지 못함: ${nextAuthId}. 기본 ID 목록 사용`);
-  const allPossibleIds = [nextAuthId, ...KNOWN_USER_IDS];
-  return allPossibleIds;
+// 채팅 조회 시 새 매핑 저장
+const saveNewChatMapping = async (nextAuthId: string, supabaseId: string, chatId: string) => {
+  try {
+    // 이미 존재하는지 확인
+    const { data: existingMapping } = await client
+      .from('user_mappings')
+      .select('id')
+      .eq('next_auth_id', nextAuthId)
+      .eq('chat_id', chatId)
+      .single();
+    
+    if (!existingMapping) {
+      // 새 채팅 매핑 저장
+      const { error } = await client
+        .from('user_mappings')
+        .insert({
+          next_auth_id: nextAuthId,
+          supabase_id: supabaseId,
+          chat_id: chatId,
+          created_at: new Date().toISOString()
+        });
+      
+      if (error) {
+        console.error(`채팅 ID ${chatId}에 대한 매핑 저장 실패:`, error);
+      } else {
+        console.log(`채팅 ID ${chatId}에 대한 새 매핑 저장 성공: ${nextAuthId} -> ${supabaseId}`);
+      }
+    }
+  } catch (error) {
+    console.error("채팅 매핑 저장 중 오류:", error);
+  }
 };
 
 export async function GET(request: NextRequest) {
@@ -52,8 +123,10 @@ export async function GET(request: NextRequest) {
   
   // 세션 ID 또는 현재 시간을 가져옴 (세션별 채팅 필터링용)
   const sessionId = searchParams.get('session_id') || '';
+  // 특정 채팅 ID 파라미터 추가
+  const chatId = searchParams.get('chat_id') || '';
   
-  console.log(`요청 파라미터: limit=${limit}, startingAfter=${startingAfter}, endingBefore=${endingBefore}, sessionId=${sessionId}`);
+  console.log(`요청 파라미터: limit=${limit}, startingAfter=${startingAfter}, endingBefore=${endingBefore}, sessionId=${sessionId}, chatId=${chatId}`);
 
   if (startingAfter && endingBefore) {
     console.log("오류: starting_after와 ending_before가 동시에 제공됨");
@@ -84,7 +157,8 @@ export async function GET(request: NextRequest) {
     console.log(`현재 사용자 ID: ${currentUserId}`);
     
     // 매핑 테이블을 통해 사용 가능한 사용자 ID 목록 가져오기
-    const userIds = await getUserIdMapping(currentUserId);
+    // 특정 채팅 ID가 있는 경우 해당 매핑 사용
+    const userIds = await getUserIdMapping(currentUserId, chatId);
     console.log(`조회할 사용자 ID: ${Array.isArray(userIds) ? userIds.join(', ') : userIds}`);
     
     // 모든 채팅 조회 쿼리 생성
@@ -99,6 +173,12 @@ export async function GET(request: NextRequest) {
     } else {
       query = query.eq('user_id', userIds);
       console.log(`단일 사용자 ID로 채팅 조회 중: ${userIds}`);
+    }
+    
+    // 특정 채팅 ID가 지정된 경우 해당 채팅만 조회
+    if (chatId && isValidUUID(chatId)) {
+      query = query.eq('id', chatId);
+      console.log(`특정 채팅 ID로 필터링: ${chatId}`);
     }
     
     // 최신순 정렬 및 제한 적용
@@ -143,89 +223,7 @@ export async function GET(request: NextRequest) {
       console.error('채팅 목록 조회 오류:', error);
       console.log(`오류 세부 정보: ${JSON.stringify(error)}`);
       
-      // 스키마 오류일 경우 다른 필드명으로 시도해보기
-      if (error.message && (error.message.includes('column') || error.message.includes('field'))) {
-        console.log("필드명 오류 가능성 있음. 다양한 필드명 형식 시도");
-        
-        // 1. userId 필드 시도
-        console.log("시도 1: 'userId' 필드로 검색");
-        const { data: altChats1, error: altError1 } = await client
-          .from('chats')
-          .select('id, title, created_at, userId')
-          .eq('userId', currentUserId)
-          .order('created_at', { ascending: false })
-          .limit(limit + 1);
-          
-        if (!altError1 && altChats1 && altChats1.length > 0) {
-          console.log(`'userId' 필드 조회 성공: ${altChats1.length}개 채팅 발견`);
-          // 원래 포맷으로 변환
-          const transformedChats = altChats1.map(chat => ({
-            id: chat.id,
-            title: chat.title,
-            created_at: chat.created_at,
-            user_id: chat.userId
-          }));
-          
-          const hasMore = transformedChats.length > limit;
-          const result = {
-            chats: hasMore ? transformedChats.slice(0, limit) : transformedChats,
-            hasMore
-          };
-          
-          return Response.json(result);
-        } else {
-          console.log(`'userId' 필드 조회 실패: ${altError1?.message || "알 수 없는 오류"}`);
-        }
-        
-        // 2. userid 필드 시도
-        console.log("시도 2: 'userid' 필드로 검색");
-        const { data: altChats2, error: altError2 } = await client
-          .from('chats')
-          .select('id, title, created_at, userid')
-          .eq('userid', currentUserId)
-          .order('created_at', { ascending: false })
-          .limit(limit + 1);
-          
-        if (!altError2 && altChats2 && altChats2.length > 0) {
-          console.log(`'userid' 필드 조회 성공: ${altChats2.length}개 채팅 발견`);
-          // 원래 포맷으로 변환
-          const transformedChats = altChats2.map(chat => ({
-            id: chat.id,
-            title: chat.title,
-            created_at: chat.created_at,
-            user_id: chat.userid
-          }));
-          
-          const hasMore = transformedChats.length > limit;
-          const result = {
-            chats: hasMore ? transformedChats.slice(0, limit) : transformedChats,
-            hasMore
-          };
-          
-          return Response.json(result);
-        } else {
-          console.log(`'userid' 필드 조회 실패: ${altError2?.message || "알 수 없는 오류"}`);
-        }
-        
-        // 3. 마지막 대안: Supabase에서 직접 테이블 스키마 정보 가져오기
-        console.log("시도 3: Supabase에서 테이블 정보 조회");
-        try {
-          // 테이블 정보 조회를 통해 필드명 확인
-          const { data: tableInfo, error: tableError } = await client.rpc('get_table_definition', {
-            table_name: 'chats'
-          });
-          
-          if (!tableError && tableInfo) {
-            console.log(`chats 테이블 정보: ${JSON.stringify(tableInfo)}`);
-          } else {
-            console.log(`테이블 정보 조회 실패: ${tableError?.message || "알 수 없는 오류"}`);
-          }
-        } catch (infoError) {
-          console.log(`테이블 정보 조회 중 예외 발생: ${infoError}`);
-        }
-      }
-      
-      return Response.json('Failed to fetch chats!', { status: 500 });
+      return Response.json({ error: '채팅 목록을 불러올 수 없습니다' }, { status: 500 });
     }
 
     console.log(`채팅 목록 조회 결과: ${chats?.length || 0}개의 채팅 발견`);
@@ -236,6 +234,15 @@ export async function GET(request: NextRequest) {
         created_at: chats[0].created_at,
         user_id: chats[0].user_id
       });
+      
+      // 발견된 각 채팅에 대해 매핑 정보 저장
+      // Array.isArray 체크는 typescript 타입 검사를 위한 것
+      if (!Array.isArray(userIds) && chats.length > 0) {
+        // 각 채팅에 대해 매핑 저장
+        for (const chat of chats) {
+          await saveNewChatMapping(currentUserId, userIds, chat.id);
+        }
+      }
     } else {
       console.log('채팅 기록이 없습니다.');
     }
@@ -250,6 +257,6 @@ export async function GET(request: NextRequest) {
     return Response.json(result);
   } catch (error) {
     console.error('데이터베이스에서 채팅 목록 조회 실패:', error);
-    return Response.json('Failed to fetch chats!', { status: 500 });
+    return Response.json({ error: '채팅 목록을 불러올 수 없습니다' }, { status: 500 });
   }
 } 

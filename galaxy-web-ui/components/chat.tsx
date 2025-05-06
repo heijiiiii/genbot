@@ -31,6 +31,7 @@ export function Chat({
   selectedVisibilityType,
   isReadonly,
   session,
+  registerChatMapping = false,
 }: {
   id: string;
   initialMessages: Array<UIMessage>;
@@ -38,6 +39,7 @@ export function Chat({
   selectedVisibilityType: VisibilityType;
   isReadonly: boolean;
   session: Session;
+  registerChatMapping?: boolean;
 }) {
   const { mutate } = useSWRConfig();
 
@@ -89,6 +91,32 @@ export function Chat({
       window.history.replaceState({}, '', `/chat/${id}`);
     }
   }, [query, append, hasAppendedQuery, id]);
+
+  useEffect(() => {
+    if (registerChatMapping && id) {
+      const registerMapping = async () => {
+        try {
+          const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chatId: id,
+            }),
+          });
+
+          if (!response.ok) {
+            console.warn('채팅 ID 매핑 등록 실패:', await response.text());
+          }
+        } catch (error) {
+          console.error('채팅 ID 매핑 등록 중 오류:', error);
+        }
+      };
+
+      registerMapping();
+    }
+  }, [id, registerChatMapping]);
 
   const { data: votes } = useSWR<Array<Vote>>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,

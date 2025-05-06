@@ -54,33 +54,51 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   const cookieStore = await cookies();
   const chatModelFromCookie = cookieStore.get('chat-model');
 
-  if (!chatModelFromCookie) {
+  try {
+    if (!chatModelFromCookie) {
+      return (
+        <>
+          <Chat
+            id={chat.id}
+            initialMessages={convertToUIMessages(messagesFromDb)}
+            selectedChatModel={DEFAULT_CHAT_MODEL}
+            selectedVisibilityType={chat.visibility}
+            isReadonly={session?.user?.id !== chat.userId}
+            session={session}
+            registerChatMapping={true}
+          />
+          <DataStreamHandler id={id} />
+        </>
+      );
+    }
+
     return (
       <>
         <Chat
           id={chat.id}
           initialMessages={convertToUIMessages(messagesFromDb)}
-          selectedChatModel={DEFAULT_CHAT_MODEL}
+          selectedChatModel={chatModelFromCookie.value}
           selectedVisibilityType={chat.visibility}
           isReadonly={session?.user?.id !== chat.userId}
           session={session}
+          registerChatMapping={true}
         />
         <DataStreamHandler id={id} />
       </>
     );
+  } catch (error) {
+    console.error('채팅 페이지 로드 중 오류:', error);
+    return (
+      <div className="flex flex-col items-center justify-center h-screen">
+        <h1 className="text-2xl mb-4">오류가 발생했습니다</h1>
+        <p className="text-gray-500 mb-4">요청한 채팅을 불러올 수 없습니다.</p>
+        <button 
+          onClick={() => window.location.href = '/'} 
+          className="px-4 py-2 bg-blue-500 text-white rounded-md"
+        >
+          홈으로 돌아가기
+        </button>
+      </div>
+    );
   }
-
-  return (
-    <>
-      <Chat
-        id={chat.id}
-        initialMessages={convertToUIMessages(messagesFromDb)}
-        selectedChatModel={chatModelFromCookie.value}
-        selectedVisibilityType={chat.visibility}
-        isReadonly={session?.user?.id !== chat.userId}
-        session={session}
-      />
-      <DataStreamHandler id={id} />
-    </>
-  );
 }
