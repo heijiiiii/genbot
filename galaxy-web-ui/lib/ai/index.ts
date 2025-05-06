@@ -155,7 +155,7 @@ export function extractImagesFromText(text: string): ImageData[] {
     
   // 파일명 패턴 기반 URL 생성 - URL 유무와 상관없이 항상 실행
   // 갤럭시 이미지 파일명 패턴을 찾기 - 더 유연한 패턴으로 수정
-  const fileNamePattern = /galaxy_s25_[a-z]+_p(\d+)_(?:top|mid|bot)_[a-f0-9]+\.jpg/gi;
+  const fileNamePattern = /galaxy_s25_(?:figure|chart)_p(\d+)_(?:top|mid|bot)_[a-f0-9]+\.jpg/gi;
   let fileNameMatch;
   
   while ((fileNameMatch = fileNamePattern.exec(text)) !== null) {

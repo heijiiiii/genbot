@@ -192,15 +192,87 @@ export function ChatImage({ image }: ChatImageProps) {
       console.log(`이미지 로드 실패 (${loadingStrategy}):`, currentUrl);
     }
     
+    // 파일명이 존재하는 이미지 목록과 일치하는지 확인
+    const existingImageCheck = () => {
+      const imageListPattern = /galaxy_s25_(?:figure|chart)_p\d+_(?:top|mid|bot)_[a-f0-9]+\.jpg/;
+      const url = originalUrl.toLowerCase();
+      
+      // 이미지 URL에서 파일명 추출
+      const filenameMatch = url.match(/([^\/]+\.jpg)(?:\?|$)/i);
+      if (filenameMatch && filenameMatch[1]) {
+        const filename = filenameMatch[1];
+        
+        // 실제 존재하는 이미지 파일명 패턴 확인
+        if (!imageListPattern.test(filename)) {
+          console.warn('존재하지 않는 이미지 패턴:', filename);
+          return false;
+        }
+        
+        if (DEBUG_IMAGE_LOADING) {
+          console.log('이미지 파일명 패턴 확인 완료:', filename);
+        }
+      }
+      return true;
+    };
+    
+    // 이미지 타입 검사 - screen 타입이나 diagram 타입은 존재하지 않음
+    const invalidImageType = originalUrl.includes('galaxy_s25_screen_') || originalUrl.includes('galaxy_s25_diagram_');
+    if (invalidImageType) {
+      console.warn('유효하지 않은 이미지 타입:', originalUrl);
+      // 유사한 이미지로 대체 시도 (figure로 변경)
+      let replacedUrl = originalUrl;
+      if (originalUrl.includes('galaxy_s25_screen_')) {
+        replacedUrl = originalUrl.replace('galaxy_s25_screen_', 'galaxy_s25_figure_');
+      } else if (originalUrl.includes('galaxy_s25_diagram_')) {
+        replacedUrl = originalUrl.replace('galaxy_s25_diagram_', 'galaxy_s25_figure_');
+      }
+      
+      if (DEBUG_IMAGE_LOADING) {
+        console.log('이미지 타입 대체 시도:', replacedUrl);
+      }
+      
+      // 대체된 URL로 변경
+      setCurrentUrl(getProxiedImageUrl(replacedUrl));
+      return;
+    }
+    
     // 이미지 로드 실패 시 처리 강화
-    if (retryCount >= MAX_RETRIES) {
+    if (retryCount >= MAX_RETRIES || !existingImageCheck()) {
       // 모든 재시도 실패 시 기본 대체 이미지로 전환
-      setError('이미지를 불러올 수 없습니다. 기본 이미지로 대체합니다.');
+      setError('이미지를 불러올 수 없어 기본 이미지로 대체합니다.');
       setIsLoading(false);
       
       // 기본 이미지로 대체 (존재가 확인된 이미지)
-      const fallbackImage = '/images/fallback-image.png'; // 프로젝트 내 로컬 이미지
-      setCurrentUrl(fallbackImage);
+      // 원본 URL에서 타입과 페이지 정보 추출 시도
+      try {
+        const typeMatch = originalUrl.match(/galaxy_s25_([a-z]+)_p(\d+)/i);
+        let fallbackType = 'figure';
+        let fallbackPage = '14';
+        
+        if (typeMatch) {
+          if (['chart', 'figure'].includes(typeMatch[1].toLowerCase())) {
+            fallbackType = typeMatch[1].toLowerCase();
+          }
+          // 페이지 번호 추출
+          const pageNum = parseInt(typeMatch[2], 10);
+          // 유효한 페이지 범위인지 확인 (1-150)
+          if (pageNum > 0 && pageNum <= 150) {
+            fallbackPage = typeMatch[2];
+          }
+        }
+        
+        // 존재가 확인된 이미지 중 하나를 선택
+        const fallbackUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_${fallbackType}_p${fallbackPage}_mid_de9837a9.jpg`;
+        setCurrentUrl(getProxiedImageUrl(fallbackUrl));
+        
+        if (DEBUG_IMAGE_LOADING) {
+          console.log('대체 이미지로 전환:', fallbackUrl);
+        }
+      } catch (e) {
+        // 오류 시 가장 기본적인 대체 이미지 사용
+        const defaultFallbackUrl = 'https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_figure_p14_mid_de9837a9.jpg';
+        setCurrentUrl(getProxiedImageUrl(defaultFallbackUrl));
+      }
       return;
     }
     

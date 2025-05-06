@@ -66,10 +66,22 @@ const AutoExtractImages = ({ messageContent, imageBlocks }: AutoExtractImagesPro
             // 중복 제거하며 추가
             blockImages.forEach(img => {
               if (!images.some(existing => existing.url === img.url)) {
+                // 이미지 URL 검증 - 존재하는 타입인지 확인
+                let validUrl = img.url;
+                if (validUrl.includes('galaxy_s25_screen_')) {
+                  // screen 타입이 있으면 figure로 대체
+                  validUrl = validUrl.replace('galaxy_s25_screen_', 'galaxy_s25_figure_');
+                  console.log('이미지 타입 수정 (screen -> figure):', validUrl);
+                } else if (validUrl.includes('galaxy_s25_diagram_')) {
+                  // diagram 타입이 있으면 figure로 대체
+                  validUrl = validUrl.replace('galaxy_s25_diagram_', 'galaxy_s25_figure_');
+                  console.log('이미지 타입 수정 (diagram -> figure):', validUrl);
+                }
+                
                 // 캐시 버스팅을 위한 타임스탬프 추가
-                const urlWithTimestamp = img.url.includes('?') 
-                  ? `${img.url}&t=${Date.now()}` 
-                  : `${img.url}?t=${Date.now()}`;
+                const urlWithTimestamp = validUrl.includes('?') 
+                  ? `${validUrl}&t=${Date.now()}` 
+                  : `${validUrl}?t=${Date.now()}`;
                   
                 images.push({
                   ...img,
@@ -88,11 +100,23 @@ const AutoExtractImages = ({ messageContent, imageBlocks }: AutoExtractImagesPro
         console.log('전체 메시지에서 이미지 추출 시도');
         const contentImages = extractImagesFromText(messageContent);
         
-        // 캐시 버스팅을 위한 타임스탬프 추가
+        // 이미지 타입 검증 및 캐시 버스팅
         images = contentImages.map(img => {
-          const urlWithTimestamp = img.url.includes('?') 
-            ? `${img.url}&t=${Date.now()}` 
-            : `${img.url}?t=${Date.now()}`;
+          let validUrl = img.url;
+          
+          // screen 타입 검사 및 대체
+          if (validUrl.includes('galaxy_s25_screen_')) {
+            validUrl = validUrl.replace('galaxy_s25_screen_', 'galaxy_s25_figure_');
+            console.log('이미지 타입 수정 (screen -> figure):', validUrl);
+          } else if (validUrl.includes('galaxy_s25_diagram_')) {
+            validUrl = validUrl.replace('galaxy_s25_diagram_', 'galaxy_s25_figure_');
+            console.log('이미지 타입 수정 (diagram -> figure):', validUrl);
+          }
+          
+          // 캐시 버스팅을 위한 타임스탬프 추가
+          const urlWithTimestamp = validUrl.includes('?') 
+            ? `${validUrl}&t=${Date.now()}` 
+            : `${validUrl}?t=${Date.now()}`;
             
           return {
             ...img,

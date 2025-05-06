@@ -408,29 +408,13 @@ export async function POST(request: Request) {
     // 갤럭시 챗봇 검색 로직 적용
     const searchContext = await searchDocuments(query);
     
-    // 시스템 프롬프트 설정
+    // 시스템 프롬프트 설정 - 간소화된 버전
     const systemPromptText = `
     당신은 삼성 갤럭시 S25의 친절하고 도움이 되는 가상 도우미입니다. 
     사용자의 질문에 대해 상세하고 유용한 정보를 제공하며, 필요한 경우 단계별 안내를 해주세요.
-    기술적인 정보뿐만 아니라 실제 사용자가 이해하기 쉽고 도움이 되는 조언도 함께 제공해 주세요.
-    친근하고 대화하듯 답변하되, 정확한 정보를 제공하는 것이 가장 중요합니다.
-
+    
     참고할 정보는 다음과 같습니다:
     ${searchContext}
-    
-    === 중요: 이미지 URL 포함 방법 ===
-    이미지가 필요한 경우 반드시 아래 형식을 정확히 따라주세요:
-    
-    [이미지 1]
-    https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_[type]_p[page]_[position]_[hash].jpg
-
-    여기서:
-    - [type]: 이미지 유형 (예: chart, figure, diagram, screen 등)
-    - [page]: 페이지 번호 (숫자)
-    - [position]: 이미지 위치 (top, mid, bot)
-    - [hash]: 고유 식별자 (16진수 해시)
-
-    *** 매우 중요: 모든 응답에 반드시 위 형식대로 이미지를 포함해야 합니다. 이미지가 없으면 사용자는 시각적 참조를 할 수 없습니다. ***
     `;
     
     // 스트리밍 응답 생성
@@ -442,7 +426,7 @@ export async function POST(request: Request) {
           : [{ role: 'user', content: query }];
           
         // 디버그 모드 설정 - 항상 활성화
-        const isDebugMode = true; // json.debug_mode === true; 대신 항상 true로 고정
+        const isDebugMode = true;
         console.log('디버그 모드 활성화 여부:', isDebugMode);
         
         // streamText 함수 옵션 수정
@@ -472,70 +456,27 @@ export async function POST(request: Request) {
         // 응답 로깅
         console.log('응답 데이터 스트림 병합됨 - 이미지 URL 전송 확인 필요');
         
-        // 스트리밍 응답 후에 별도로 직접 API 호출로 응답 확인 (이미지 URL 처리용)
-        try {
-          const completion = await openai.chat.completions.create({
-            model: "gpt-4o",
-            messages: [
-              { role: "system", content: systemPromptText },
-              { role: "user", content: query }
-            ],
-          });
-          
-          const fullContent = completion.choices[0]?.message?.content || '';
-          console.log('직접 API 호출 응답 길이:', fullContent.length);
-          
-          // 이미지 패턴 확인
-          const hasImagePattern = fullContent.includes('[이미지');
-          const hasSupabaseUrl = fullContent.includes('ywvoksfszaelkceectaa.supabase.co');
-          
-          console.log('응답에 이미지 패턴 포함:', hasImagePattern);
-          console.log('응답에 Supabase URL 포함:', hasSupabaseUrl);
-          
-          // 이미지 메타데이터를 스트림으로 전송하지 않고 프론트엔드에서 처리하도록 함
-          // 프론트엔드에서는 텍스트에서 이미지 패턴을 추출하여 표시
-          
-          // 이미지가 있는 경우 로깅만 수행
-          if (hasImagePattern || hasSupabaseUrl) {
-            console.log('응답에 이미지 패턴이 있음 - 프론트엔드에서 처리 예정');
+        // 스트리밍이 완료되면 메시지 저장
+        if (newChatId) {
+          try {
+            // 응답 텍스트 추출 (스트리밍 응답에서는 직접 접근 불가능)
+            // 대신 응답 완료 후 채팅 저장 시 필요한 내용만 처리
+            await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/chat`, {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                chatId: newChatId,
+                content: `[시스템 응답: ${new Date().toISOString()}]`,
+                metadata: { isStreamResponse: true }
+              }),
+            });
             
-            try {
-              const images = extractImagesFromText(fullContent);
-              if (images && images.length > 0) {
-                console.log('이미지 추출 성공 (백엔드):', images.length);
-              }
-            } catch (error) {
-              console.error('이미지 추출 중 오류 (백엔드):', error);
-            }
+            console.log('메시지 저장 성공');
+          } catch (saveError) {
+            console.error('메시지 저장 중 오류:', saveError);
           }
-          
-          // 메시지 저장은 이미지 없이 텍스트만 저장
-          if (newChatId) {
-            try {
-              // 응답 메시지 저장
-              const messageResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/chat`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  chatId: newChatId,
-                  content: fullContent
-                }),
-              });
-              
-              if (!messageResponse.ok) {
-                console.error('메시지 저장 실패:', await messageResponse.text());
-              } else {
-                console.log('메시지 저장 성공');
-              }
-            } catch (saveError) {
-              console.error('메시지 저장 중 오류:', saveError);
-            }
-          }
-          
-        } catch (error) {
-          console.error('직접 API 호출 오류:', error);
         }
       },
       onError: (error) => {
