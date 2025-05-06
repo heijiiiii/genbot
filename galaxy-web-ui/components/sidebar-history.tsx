@@ -97,6 +97,12 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   const { setOpenMobile } = useSidebar();
   const { id } = useParams();
 
+  console.log("사이드바 사용자 상태:", user ? {
+    id: user.id,
+    email: user.email,
+    로그인여부: !!user
+  } : "로그인 안됨");
+
   const {
     data: paginatedChatHistories,
     setSize,
@@ -106,6 +112,21 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   } = useSWRInfinite<ChatHistory>(getChatHistoryPaginationKey, fetcher, {
     fallbackData: [],
   });
+
+  console.log("채팅 기록 데이터:", paginatedChatHistories ? {
+    페이지수: paginatedChatHistories.length,
+    전체채팅수: paginatedChatHistories.reduce((total, page) => total + page.chats.length, 0),
+    첫페이지_채팅수: paginatedChatHistories[0]?.chats.length || 0,
+    오류여부: paginatedChatHistories.some(page => page === undefined)
+  } : "데이터 없음");
+
+  if (paginatedChatHistories && paginatedChatHistories.length > 0 && paginatedChatHistories[0].chats.length > 0) {
+    console.log("첫 번째 채팅:", {
+      id: paginatedChatHistories[0].chats[0].id,
+      title: paginatedChatHistories[0].chats[0].title,
+      createdAt: paginatedChatHistories[0].chats[0].createdAt
+    });
+  }
 
   const router = useRouter();
   const [deleteId, setDeleteId] = useState<string | null>(null);
