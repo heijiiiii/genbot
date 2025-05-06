@@ -1,7 +1,7 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { artifactDefinitions, type ArtifactKind } from './artifact';
 import type { Suggestion } from '@/lib/db/schema';
 import { initialArtifactData, useArtifact } from '@/hooks/use-artifact';
@@ -39,7 +39,7 @@ export function DataStreamHandler({ id }: { id: string }) {
   const [bufferedContent, setBufferedContent] = useState('');
   
   // 이미지 메타데이터 직접 처리 기능
-  const processImagesMetadata = (imageData: ImageData[]) => {
+  const processImagesMetadata = useCallback((imageData: ImageData[]) => {
     if (!imageData || imageData.length === 0) return;
     
     console.log('이미지 메타데이터 수신:', imageData.length);
@@ -110,10 +110,10 @@ export function DataStreamHandler({ id }: { id: string }) {
     });
     
     imagesProcessed.current = true;
-  };
+  }, [setMessages]);
 
   // 마지막 메시지에서 이미지 추출
-  const processLastMessage = () => {
+  const processLastMessage = useCallback(() => {
     if (!messages || messages.length === 0 || imagesProcessed.current) return;
     
     const lastMessage = messages[messages.length - 1];
@@ -171,7 +171,7 @@ export function DataStreamHandler({ id }: { id: string }) {
     } catch (error) {
       console.error('이미지 추출 중 오류:', error);
     }
-  };
+  }, [messages, setMessages]);
 
   // 스트림 데이터 처리
   useEffect(() => {

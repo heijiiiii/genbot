@@ -123,7 +123,7 @@ export function ChatImage({ image }: ChatImageProps) {
       return true;
     }
     return false;
-  }, [loadingStrategy, proxiedUrl, originalUrl, loadingStrategies]);
+  }, [loadingStrategy, loadingStrategies]);
   
   // 이미지 로딩 재시도 함수
   const retryLoading = useCallback(async () => {
