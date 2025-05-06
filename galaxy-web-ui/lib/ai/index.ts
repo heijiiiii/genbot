@@ -17,25 +17,81 @@ export interface ChatResponse {
  * 이미지 URL을 정규화하고 프록시 URL로 변환합니다.
  */
 export function getProxyImageUrl(originalUrl: string): string {
+  // 이미지 URL이 없으면 빈 문자열 반환
+  if (!originalUrl) return '';
+  
   // 이미 프록시된 URL인 경우 그대로 반환
   if (originalUrl.includes('/api/proxy-image')) {
     return originalUrl;
   }
   
-  // URL 정규화: 이중 슬래시를 단일 슬래시로 변환 (프로토콜 다음 부분만)
-  let normalizedUrl = originalUrl.replace(/([^:])\/\/+/g, '$1/');
-  
-  // URL 앞에 @ 기호가 있는 경우 제거
-  normalizedUrl = normalizedUrl.replace(/(https?:\/\/)@/gi, '$1');
-  
-  // 프로토콜이 없는 경우 https를 기본으로 추가
-  if (!normalizedUrl.match(/^https?:\/\//i)) {
-    normalizedUrl = `https://${normalizedUrl}`;
+  try {
+    // 임시 로깅 추가
+    console.log('정규화 전 URL:', originalUrl);
+    
+    // URL 앞에 @ 기호가 있는 경우 제거 (선행 @ 기호 제거)
+    if (originalUrl.startsWith('@')) {
+      originalUrl = originalUrl.substring(1);
+      console.log('선행 @ 기호 제거 후:', originalUrl);
+    }
+    
+    // URL 정규화: 이중 슬래시를 단일 슬래시로 변환 (프로토콜 다음 부분만)
+    // 수정: protocol:// 형식의 이중 슬래시는 보존
+    let normalizedUrl = originalUrl.replace(/([^:])\/\/+/g, '$1/');
+    
+    // URL 앞에 @ 기호가 있는 경우 제거 (중복 제거 확인)
+    normalizedUrl = normalizedUrl.replace(/^@/, '');
+    
+    // 프로토콜 이후의 @ 기호 제거 (예: https://@example.com)
+    normalizedUrl = normalizedUrl.replace(/(https?:\/\/)@/gi, '$1');
+    
+    // 프로토콜이 없는 경우 https를 기본으로 추가
+    if (!normalizedUrl.match(/^https?:\/\//i)) {
+      normalizedUrl = `https://${normalizedUrl}`;
+    }
+    
+    // 이미지 경로에서 이중 슬래시 추가 검사 (특별 케이스)
+    // /images//와 같은 이중 슬래시를 /images/로 수정
+    normalizedUrl = normalizedUrl.replace(/\/images\/\/+/g, '/images/');
+    
+    // Supabase URL 특별 처리 - 도메인 경로 표준화
+    if (normalizedUrl.includes('supabase.co')) {
+      // storage/v1 경로 중복 제거
+      normalizedUrl = normalizedUrl.replace(/(storage\/v1\/+).*?(storage\/v1\/+)/i, '$1');
+      
+      // object/public 경로 중복 제거
+      normalizedUrl = normalizedUrl.replace(/(object\/public\/+).*?(object\/public\/+)/i, '$1');
+      
+      console.log('Supabase URL 경로 표준화:', normalizedUrl);
+    }
+    
+    // URL 유효성 검사 시도
+    try {
+      // URL 객체 생성 시도 (잘못된 URL은 예외 발생)
+      new URL(normalizedUrl);
+    } catch (urlError) {
+      console.error('잘못된 URL 형식:', normalizedUrl, urlError);
+      // URL 복구 시도 - 기본 Supabase URL 패턴이면 가정하고 수정
+      if (normalizedUrl.includes('supabase.co')) {
+        const filename = normalizedUrl.split('/').pop() || '';
+        normalizedUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${filename}`;
+        console.log('URL 복구 시도:', normalizedUrl);
+      }
+    }
+    
+    // 임시 로깅 추가
+    console.log('정규화 후 URL:', normalizedUrl);
+    
+    // URL 인코딩 처리
+    const encodedUrl = encodeURIComponent(normalizedUrl);
+    const proxyUrl = `/api/proxy-image?url=${encodedUrl}`;
+    
+    return proxyUrl;
+  } catch (error) {
+    console.error('URL 정규화 처리 중 오류:', error);
+    // 오류 발생 시 기본 인코딩만 적용한 프록시 URL 반환
+    return `/api/proxy-image?url=${encodeURIComponent(originalUrl)}`;
   }
-  
-  // URL 인코딩 처리
-  const encodedUrl = encodeURIComponent(normalizedUrl);
-  return `/api/proxy-image?url=${encodedUrl}`;
 }
 
 /**
@@ -44,129 +100,57 @@ export function getProxyImageUrl(originalUrl: string): string {
 export function extractImagesFromText(text: string): ImageData[] {
   const images: ImageData[] = [];
   console.log('이미지 추출 시작:', text.substring(0, 200) + '...');
-  console.log('텍스트 전체 길이:', text.length);
   
-  // 텍스트에 이미지 패턴이 있는지 먼저 확인
-  const hasImagePattern = text.includes('[이미지');
-  console.log('[이미지] 패턴 존재:', hasImagePattern);
+  // 백엔드 응답이 일관된 형태를 가지므로 단순화된 패턴 사용
+  // [이미지 숫자] 다음 줄에 URL이 오는 패턴
+  const imagePattern = /\[이미지\s*(\d+)\]\s*(?:\n|\r\n)(https?:\/\/[^\s\n]+)/gi;
   
-  // 텍스트에 Supabase 도메인이 포함되어 있는지 검사
-  const hasSupabaseDomain = text.includes('ywvoksfszaelkceectaa.supabase.co');
-  console.log('Supabase URL 존재:', hasSupabaseDomain);
-  
-  // 원본 텍스트 출력 (디버깅용)
-  console.log('원본 텍스트 (전체):', text);
-  
-  // 이미지 패턴들 시도
-  
-  // 1. 기본 패턴: [이미지 숫자] 다음 줄에 URL
-  const pattern1 = /\[이미지\s*(\d+)\][^\n]*\n(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gim;
-  
-  // 2. @ 문자가 붙은 URL 패턴
-  const pattern2 = /\[이미지\s*(\d+)\][^\n]*\n@(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gim;
-  
-  // 3. 간단한 패턴: [이미지 숫자]와 URL이 같은 줄에 있는 경우
-  const pattern3 = /\[이미지\s*(\d+)\][^\n]*\s+(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gim;
-  
-  // 4. 이미지 패턴과 URL 사이에 여러 줄이 있는 경우
-  const pattern4 = /\[이미지\s*(\d+)\][^\n]*\n(?:(?!https?:\/\/)[^\n]*\n)*?(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gim;
-  
-  // 5. 추가 패턴: [이미지 숫자]와 URL 사이에 다른 텍스트가 있는 경우
-  const pattern5 = /\[이미지\s*(\d+)\].*?(https?:\/\/[^\s\n]+?)(?:\?.*?)?(?:\s|$)/gims;
-  
-  // 6. 패턴 없이 순수 Supabase URL만 추출
-  const pattern6 = /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n?]+(?:\?[^\s\n]*)?/gi;
-  
-  // 패턴별 매치 시도 및 로그
-  const tryPattern = (pattern: RegExp, patternName: string) => {
-    try {
-      let match;
-      let matchCount = 0;
-      
-      while ((match = pattern.exec(text)) !== null) {
-        // 패턴 6만 특별 처리 (이미지 번호 없음)
-        if (patternName === "순수 URL 패턴") {
-          const imageUrl = match[0].trim();
-          matchCount++;
-          console.log(`${patternName} 매치 #${matchCount}: ${imageUrl.substring(0, 50)}...`);
-          
-          // 이미 추가된 URL인지 확인 (중복 방지)
-          if (!images.some(img => img.url === imageUrl)) {
-            images.push({ 
-              url: imageUrl, 
-              page: String(matchCount), 
-              relevance_score: 0.5 // 기본값 (신뢰도 낮음)
-            });
-          }
-          continue;
-        }
-        
-        // 일반 패턴 처리
-        const imageNum = match[1];
-        let imageUrl = match[2]?.trim();
-        
-        if (!imageUrl) continue;
-        
-        // URL이 ?로 끝나면 제거
-        if (imageUrl.endsWith('?')) {
-          imageUrl = imageUrl.slice(0, -1);
-        }
-        
-        matchCount++;
-        console.log(`${patternName} 매치 #${matchCount}: [${imageNum}] ${imageUrl.substring(0, 100)}...`);
-        
-        // 이미 추가된 URL인지 확인 (중복 방지)
-        if (!images.some(img => img.url === imageUrl)) {
-          images.push({ 
-            url: imageUrl, 
-            page: imageNum, 
-            relevance_score: 0.8 // 기본값
-          });
-        }
-      }
-      
-      console.log(`${patternName} 총 매치 수:`, matchCount);
-      return matchCount;
-    } catch (error) {
-      console.error(`${patternName} 매칭 오류:`, error);
-      return 0;
+  let match;
+  while ((match = imagePattern.exec(text)) !== null) {
+    const imageNum = match[1];
+    const imageUrl = match[2].trim();
+    
+    console.log(`이미지 매칭: [${imageNum}] ${imageUrl.substring(0, 100)}...`);
+    
+    // 이미 추가된 URL인지 확인 (중복 방지)
+    if (!images.some(img => img.url === imageUrl)) {
+      images.push({ 
+        url: imageUrl, 
+        page: imageNum, 
+        relevance_score: 0.8
+      });
     }
-  };
-  
-  // 모든 패턴 시도
-  let totalMatches = 0;
-  totalMatches += tryPattern(pattern1, "기본 패턴");
-  totalMatches += tryPattern(pattern2, "@ 패턴");
-  totalMatches += tryPattern(pattern3, "한 줄 패턴");
-  totalMatches += tryPattern(pattern4, "여러 줄 패턴");
-  totalMatches += tryPattern(pattern5, "혼합 패턴");
-  
-  console.log("패턴 매칭 이미지 총 수:", totalMatches);
-  
-  // 백업 패턴: 이미지 패턴이 없지만 Supabase URL은 있는 경우 직접 추출
-  if (images.length === 0 && hasSupabaseDomain) {
-    console.log("주 패턴 실패, 순수 URL 추출 시도");
-    totalMatches += tryPattern(pattern6, "순수 URL 패턴");
   }
   
   // 결과 로깅
-  console.log('최종 추출된 이미지 URL 수:', images.length);
+  console.log('추출된 이미지 URL 수:', images.length);
   if (images.length > 0) {
-    console.log('첫 번째 이미지 URL:', images[0].url);
-    // 모든 이미지 URL 로깅
     images.forEach((img, idx) => {
       console.log(`이미지 #${idx+1}, 페이지: ${img.page}, URL: ${img.url.substring(0, 50)}...`);
     });
-  } else {
-    console.log('추출된 이미지 URL 없음');
-    // 별도 검증 시도: 일반 텍스트에서 URL 추출
-    console.log('전체 텍스트 길이:', text.length);
-    const directUrls = text.match(/https?:\/\/[^\s\n]+/g);
-    console.log('직접 추출된 이미지 URL 없음');
-    console.log('텍스트에서 발견된 모든 URL 패턴:', directUrls?.length || 0);
-    if (directUrls && directUrls.length > 0) {
-      console.log('첫 번째 URL:', directUrls[0]);
+  }
+  
+  // 백업: Supabase URL 직접 추출 (이미지 태그가 없는 경우)
+  if (images.length === 0 && text.includes('ywvoksfszaelkceectaa.supabase.co')) {
+    console.log("이미지 태그 없음, Supabase URL 직접 추출 시도");
+    const directUrlPattern = /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n?]+/gi;
+    
+    let urlMatch;
+    let matchCount = 0;
+    while ((urlMatch = directUrlPattern.exec(text)) !== null) {
+      const imageUrl = urlMatch[0].trim();
+      matchCount++;
+      
+      if (!images.some(img => img.url === imageUrl)) {
+        images.push({ 
+          url: imageUrl, 
+          page: String(matchCount), 
+          relevance_score: 0.5
+        });
+      }
     }
+    
+    console.log('직접 URL 추출 결과:', images.length);
   }
   
   return images;

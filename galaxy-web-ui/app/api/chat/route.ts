@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { API_BASE_URL } from '@/lib/constants';
+import { extractImagesFromText } from '@/lib/ai';
 
 // Stream 챗봇 응답
 export async function POST(req: NextRequest) {
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
     const payload = {
       message: message.content,
       history: history,
-      debug_mode: false,
+      debug_mode: true, // 디버깅 모드 활성화
     };
     
     // FastAPI 서버로 요청 전송
@@ -40,25 +41,50 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    // 응답 데이터 처리
+    // 응답 데이터 처리 - 전체 응답을 한번에 받아서 처리
     const data = await response.json();
     
-    // 이미지 URL 처리
+    // 이미지 추출 및 처리 로직 개선: 이미지 패턴이 스트리밍 중에 분할되지 않도록 함
     let images = [];
+    let processedContent = data.answer;
+    
+    // 이미지 패턴 추출
+    const imageBlocks = [];
+    const imageBlockPattern = /\[이미지\s*\d+\](?:[\s\S]*?)(?:https?:\/\/[^\s\n]+)/g;
+    let imageBlockMatch;
+    
+    // 이미지 블록 전체를 찾아서 저장
+    while ((imageBlockMatch = imageBlockPattern.exec(data.answer)) !== null) {
+      imageBlocks.push(imageBlockMatch[0]);
+    }
+    
+    // 1. API가 직접 이미지를 제공하는 경우 사용
     if (data.images && data.images.length > 0) {
+      console.log('API에서 제공한 이미지 사용:', data.images.length);
       images = data.images.map((img: any) => ({
         url: img.url,
         page: img.page,
         relevance_score: img.relevance_score || 0,
       }));
+    } 
+    // 2. 텍스트에서 이미지 추출
+    else {
+      console.log('텍스트에서 이미지 추출 시도');
+      const extractedImages = extractImagesFromText(data.answer);
+      
+      if (extractedImages && extractedImages.length > 0) {
+        console.log('텍스트에서 이미지 추출 성공:', extractedImages.length);
+        images = extractedImages;
+      }
     }
     
-    // 클라이언트에 응답 반환
+    // 클라이언트에 응답 반환 - 이미지 데이터와 이미지 블록 정보를 함께 전송
     return NextResponse.json({
       id: Date.now().toString(),
       role: 'assistant',
-      content: data.answer,
+      content: processedContent,
       images: images,
+      imageBlocks: imageBlocks // 이미지 패턴이 포함된 블록 정보 추가
     });
   } catch (error: any) {
     console.error('챗봇 API 오류:', error);

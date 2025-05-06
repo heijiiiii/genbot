@@ -25,50 +25,89 @@ function getProxiedImageUrl(url: string): string {
   // URL이 이미 프록시를 사용하고 있다면 그대로 반환
   if (url.includes('/api/proxy-image')) return url;
   
-  // URL에서 @ 기호 제거 (supabase 이미지에서 종종 발생)
-  if (url.startsWith('@')) {
-    url = url.substring(1);
-    if (DEBUG_IMAGE_LOADING) {
-      console.log('@ 기호 제거 후 URL:', url);
+  try {
+    // URL에서 @ 기호 제거 (선행 @ 기호 제거)
+    if (url.startsWith('@')) {
+      url = url.substring(1);
+      if (DEBUG_IMAGE_LOADING) {
+        console.log('선행 @ 기호 제거 후 URL:', url);
+      }
     }
-  }
-  
-  // URL 끝에 ? 기호 제거
-  if (url.endsWith('?')) {
-    url = url.slice(0, -1);
+    
+    // 프로토콜 이후의 @ 기호 제거 (예: https://@example.com)
+    url = url.replace(/(https?:\/\/)@/gi, '$1');
     if (DEBUG_IMAGE_LOADING) {
-      console.log('URL 끝 ? 기호 제거 후:', url);
+      console.log('프로토콜 이후 @ 기호 제거 후 URL:', url);
     }
-  }
-  
-  // URL 정규화: 이중 슬래시를 단일 슬래시로 변환 (프로토콜 다음 부분만)
-  let normalizedUrl = url.replace(/([^:])\/\/+/g, '$1/');
-  
-  // 추가 처리: 'https://@' 패턴 수정
-  normalizedUrl = normalizedUrl.replace(/(https?:\/\/)@/gi, '$1');
-  
-  // 추가: 프로토콜이 없는 URL에 https 추가
-  if (!normalizedUrl.match(/^https?:\/\//i)) {
-    normalizedUrl = `https://${normalizedUrl}`;
+    
+    // URL 끝에 ? 기호 제거
+    if (url.endsWith('?')) {
+      url = url.slice(0, -1);
+      if (DEBUG_IMAGE_LOADING) {
+        console.log('URL 끝 ? 기호 제거 후:', url);
+      }
+    }
+    
+    // URL 정규화: 이중 슬래시를 단일 슬래시로 변환 (프로토콜 다음 부분만)
+    let normalizedUrl = url.replace(/([^:])\/\/+/g, '$1/');
+    
+    // 추가 처리: 'https://@' 패턴 수정
+    normalizedUrl = normalizedUrl.replace(/(https?:\/\/)@/gi, '$1');
+    
+    // 추가: 프로토콜이 없는 URL에 https 추가
+    if (!normalizedUrl.match(/^https?:\/\//i)) {
+      normalizedUrl = `https://${normalizedUrl}`;
+      if (DEBUG_IMAGE_LOADING) {
+        console.log('프로토콜 추가됨:', normalizedUrl);
+      }
+    }
+    
+    // Supabase URL 특별 처리 - 도메인 경로 표준화
+    if (normalizedUrl.includes('supabase.co')) {
+      // storage/v1 경로 중복 제거
+      normalizedUrl = normalizedUrl.replace(/(storage\/v1\/+).*?(storage\/v1\/+)/i, '$1');
+      
+      // object/public 경로 중복 제거
+      normalizedUrl = normalizedUrl.replace(/(object\/public\/+).*?(object\/public\/+)/i, '$1');
+      
+      if (DEBUG_IMAGE_LOADING) {
+        console.log('Supabase URL 경로 표준화:', normalizedUrl);
+      }
+    }
+    
+    // 디버깅 로그
+    if (DEBUG_IMAGE_LOADING && normalizedUrl !== url) {
+      console.log('URL 정규화됨:', normalizedUrl);
+    }
+    
+    // URL 유효성 검사 시도
+    try {
+      // URL 객체 생성 시도 (잘못된 URL은 예외 발생)
+      new URL(normalizedUrl);
+    } catch (urlError) {
+      console.error('잘못된 URL 형식:', normalizedUrl, urlError);
+      // URL 복구 시도 - 기본 Supabase URL 패턴이면 가정하고 수정
+      if (normalizedUrl.includes('supabase.co')) {
+        normalizedUrl = 'https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/' + 
+          normalizedUrl.split('/').pop();
+        console.log('URL 복구 시도:', normalizedUrl);
+      }
+    }
+    
+    // URL 인코딩 - 쿼리 파라미터를 보존하기 위해 URL 자체를 인코딩
+    const encodedUrl = encodeURIComponent(normalizedUrl);
+    const proxiedUrl = `/api/proxy-image?url=${encodedUrl}`;
+    
     if (DEBUG_IMAGE_LOADING) {
-      console.log('프로토콜 추가됨:', normalizedUrl);
+      console.log('프록시 URL로 변환됨:', proxiedUrl);
     }
+    
+    return proxiedUrl;
+  } catch (error) {
+    console.error('URL 처리 중 오류 발생:', error);
+    // 오류 발생 시 원본 URL에 프록시 적용
+    return `/api/proxy-image?url=${encodeURIComponent(url)}`;
   }
-  
-  // 디버깅 로그
-  if (DEBUG_IMAGE_LOADING && normalizedUrl !== url) {
-    console.log('URL 정규화됨:', normalizedUrl);
-  }
-  
-  // URL 인코딩 - 쿼리 파라미터를 보존하기 위해 URL 자체를 인코딩
-  const encodedUrl = encodeURIComponent(normalizedUrl);
-  const proxiedUrl = `/api/proxy-image?url=${encodedUrl}`;
-  
-  if (DEBUG_IMAGE_LOADING) {
-    console.log('프록시 URL로 변환됨:', proxiedUrl);
-  }
-  
-  return proxiedUrl;
 }
 
 // 이미지 로딩 재시도 설정

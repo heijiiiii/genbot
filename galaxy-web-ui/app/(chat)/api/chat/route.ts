@@ -499,65 +499,46 @@ export async function POST(request: Request) {
           console.log('응답에 이미지 패턴 포함:', hasImagePattern);
           console.log('응답에 Supabase URL 포함:', hasSupabaseUrl);
           
-          // 이미지 패턴이 있는 경우에만 이미지 메타데이터 추가
+          // 이미지 메타데이터를 스트림으로 전송하지 않고 프론트엔드에서 처리하도록 함
+          // 프론트엔드에서는 텍스트에서 이미지 패턴을 추출하여 표시
+          
+          // 이미지가 있는 경우 로깅만 수행
           if (hasImagePattern || hasSupabaseUrl) {
-            // 이미지 URL 추출
-            const images = extractImagesFromText(fullContent);
+            console.log('응답에 이미지 패턴이 있음 - 프론트엔드에서 처리 예정');
             
-            if (images && images.length > 0) {
-              console.log('응답에서 이미지 추출됨:', images.length);
-              
-              // 이미지 URL을 정규화 (프록시 URL로 변환)
-              const normalizedImages = images.map((img: ImageData) => ({
-                ...img,
-                url: getProxyImageUrl(img.url)
-              }));
-              
-              // 스트림에 이미지 메타데이터 추가
-              dataStream.write({
-                type: 'images',
-                content: normalizedImages
-              } as any);
-              
-              console.log('스트림에 이미지 메타데이터 추가됨:', normalizedImages.length);
-              
-              // 저장 로직 (기존 코드 유지)
-              if (newChatId) {
-                try {
-                  // 응답 메시지에 이미지 정보 추가
-                  const messageMetadata = {
-                    images: images,
-                    chat_id: newChatId,
-                    content: fullContent
-                  };
-                  
-                  // 메시지 저장 API 호출
-                  const metadataResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/chat`, {
-                    method: 'PUT',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      chatId: newChatId,
-                      content: fullContent,
-                      metadata: {
-                        images: images
-                      }
-                    }),
-                  });
-                  
-                  if (!metadataResponse.ok) {
-                    console.error('이미지 메타데이터 저장 실패:', await metadataResponse.text());
-                  } else {
-                    console.log('이미지 메타데이터 저장 성공');
-                  }
-                } catch (metadataError) {
-                  console.error('이미지 메타데이터 저장 중 오류:', metadataError);
-                }
+            try {
+              const images = extractImagesFromText(fullContent);
+              if (images && images.length > 0) {
+                console.log('이미지 추출 성공 (백엔드):', images.length);
               }
+            } catch (error) {
+              console.error('이미지 추출 중 오류 (백엔드):', error);
             }
-          } else {
-            console.log('응답에 이미지 패턴이 없음 - 이미지를 추가하지 않음');
+          }
+          
+          // 메시지 저장은 이미지 없이 텍스트만 저장
+          if (newChatId) {
+            try {
+              // 응답 메시지 저장
+              const messageResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/chat`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  chatId: newChatId,
+                  content: fullContent
+                }),
+              });
+              
+              if (!messageResponse.ok) {
+                console.error('메시지 저장 실패:', await messageResponse.text());
+              } else {
+                console.log('메시지 저장 성공');
+              }
+            } catch (saveError) {
+              console.error('메시지 저장 중 오류:', saveError);
+            }
           }
           
         } catch (error) {

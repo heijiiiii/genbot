@@ -26,10 +26,77 @@ import { extractImagesFromText } from '@/lib/ai';
 // 메시지 속성에 이미지 배열 추가
 interface MessageWithImages extends UIMessage {
   images?: ImageData[];
+  imageBlocks?: string[];
 }
 
 // 디버깅 상수
 const DEBUG_MESSAGE_IMAGES = false;
+
+// 텍스트에서 이미지를 자동으로 추출하는 컴포넌트
+interface AutoExtractImagesProps {
+  messageContent: string;
+  imageBlocks?: string[];
+}
+
+const AutoExtractImages = ({ messageContent, imageBlocks }: AutoExtractImagesProps) => {
+  const [extractedImages, setExtractedImages] = useState<ImageData[]>([]);
+  const [isExtracted, setIsExtracted] = useState(false);
+  
+  useEffect(() => {
+    if (isExtracted) return;
+    
+    try {
+      console.log('자동 이미지 추출 시도...');
+      let images: ImageData[] = [];
+      
+      // 1. 이미지 블록이 있는 경우 우선 처리 (더 정확한 결과)
+      if (imageBlocks && imageBlocks.length > 0) {
+        console.log('이미지 블록에서 이미지 추출 시도:', imageBlocks.length);
+        
+        imageBlocks.forEach(block => {
+          const blockImages = extractImagesFromText(block);
+          if (blockImages.length > 0) {
+            // 중복 제거하며 추가
+            blockImages.forEach(img => {
+              if (!images.some(existing => existing.url === img.url)) {
+                images.push(img);
+              }
+            });
+          }
+        });
+        
+        console.log('이미지 블록에서 추출된 이미지:', images.length);
+      }
+      
+      // 2. 이미지 블록에서 추출 실패 또는 이미지 블록이 없는 경우 전체 컨텐츠에서 추출 시도
+      if (images.length === 0 && messageContent) {
+        console.log('전체 메시지에서 이미지 추출 시도');
+        const contentImages = extractImagesFromText(messageContent);
+        images = contentImages;
+      }
+      
+      setExtractedImages(images);
+      setIsExtracted(true);
+      console.log(`자동 추출된 이미지: ${images.length}개`);
+    } catch (error) {
+      console.error('이미지 자동 추출 중 오류:', error);
+      setIsExtracted(true);
+    }
+  }, [messageContent, imageBlocks, isExtracted]);
+  
+  if (!extractedImages || extractedImages.length === 0) return null;
+  
+  return (
+    <div className="mt-2">
+      {DEBUG_MESSAGE_IMAGES && (
+        <div className="bg-amber-50 p-2 rounded-md mb-2 text-xs">
+          자동 추출된 이미지 {extractedImages.length}개
+        </div>
+      )}
+      <ChatImageGallery images={extractedImages} />
+    </div>
+  );
+};
 
 const PurePreviewMessage = ({
   chatId,
@@ -283,7 +350,7 @@ const PurePreviewMessage = ({
             {/* 메시지에 이미지가 있으면 이미지 갤러리 표시 */}
             {message.role === 'assistant' && (
               <>
-                {/* 이미지 배열이 있는 경우 */}
+                {/* 1. 이미지 배열이 직접 제공된 경우 */}
                 {message.images && message.images.length > 0 && (
                   <>
                     {DEBUG_MESSAGE_IMAGES && (
@@ -293,6 +360,29 @@ const PurePreviewMessage = ({
                     )}
                     <ChatImageGallery images={message.images} />
                   </>
+                )}
+                
+                {/* 2. 이미지가 없지만 이미지 블록이 있는 경우 블록에서 자동 추출 */}
+                {(!message.images || message.images.length === 0) && message.imageBlocks && message.imageBlocks.length > 0 && (
+                  <>
+                    {DEBUG_MESSAGE_IMAGES && (
+                      <div className="bg-green-50 p-2 rounded-md mb-2 text-xs">
+                        이미지 블록 {message.imageBlocks.length}개에서 추출 시도
+                      </div>
+                    )}
+                    <AutoExtractImages 
+                      messageContent={message.content} 
+                      imageBlocks={message.imageBlocks} 
+                    />
+                  </>
+                )}
+                
+                {/* 3. 이미지도 없고 블록도 없지만 이미지 패턴이 있는 경우 텍스트에서 추출 시도 */}
+                {(!message.images || message.images.length === 0) && 
+                 (!message.imageBlocks || message.imageBlocks.length === 0) && 
+                 message.content && 
+                 (message.content.includes('[이미지') || message.content.includes('ywvoksfszaelkceectaa.supabase.co')) && (
+                  <AutoExtractImages messageContent={message.content} />
                 )}
               </>
             )}
@@ -323,7 +413,8 @@ export const PreviewMessage = memo(PurePreviewMessage, (prev, next) => {
     equal(prev.message.parts, next.message.parts) &&
     equal(prev.vote, next.vote) &&
     prev.isLoading === next.isLoading &&
-    equal(prev.message.images, next.message.images)
+    equal(prev.message.images, next.message.images) &&
+    equal(prev.message.imageBlocks, next.message.imageBlocks)
   );
 });
 
