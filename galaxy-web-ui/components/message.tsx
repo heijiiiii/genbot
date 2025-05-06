@@ -422,43 +422,11 @@ const PurePreviewMessage = ({
               </div>
             )}
             
-            {/* 메시지에 이미지가 있으면 이미지 갤러리 표시 */}
+            {/* 메시지에 이미지가 있으면 이미지 갤러리 표시 - 여러 이미지를 모두 표시하도록 수정 */}
             {message.role === 'assistant' && (
               <>
-                {/* 1. 이미지 배열이 직접 제공된 경우 */}
-                {message.images && message.images.length > 0 && (
-                  <>
-                    {DEBUG_MESSAGE_IMAGES && (
-                      <div className="bg-blue-50 p-2 rounded-md mb-2 text-xs">
-                        이미지 {message.images.length}개 표시됨
-                      </div>
-                    )}
-                    <ChatImageGallery images={message.images} />
-                  </>
-                )}
-                
-                {/* 2. 이미지가 없지만 이미지 블록이 있는 경우 블록에서 자동 추출 */}
-                {(!message.images || message.images.length === 0) && message.imageBlocks && message.imageBlocks.length > 0 && (
-                  <>
-                    {DEBUG_MESSAGE_IMAGES && (
-                      <div className="bg-green-50 p-2 rounded-md mb-2 text-xs">
-                        이미지 블록 {message.imageBlocks.length}개에서 추출 시도
-                      </div>
-                    )}
-                    <AutoExtractImages 
-                      messageContent={message.content} 
-                      imageBlocks={message.imageBlocks} 
-                    />
-                  </>
-                )}
-                
-                {/* 3. 이미지도 없고 블록도 없지만 이미지 패턴이 있는 경우 텍스트에서 추출 시도 */}
-                {(!message.images || message.images.length === 0) && 
-                 (!message.imageBlocks || message.imageBlocks.length === 0) && 
-                 message.content && 
-                 (message.content.includes('[이미지') || message.content.includes('ywvoksfszaelkceectaa.supabase.co')) && (
-                  <AutoExtractImages messageContent={message.content} />
-                )}
+                {/* 모든 이미지 소스(api, 블록, 텍스트)에서 이미지를 함께 표시 */}
+                <MergedImagesDisplay message={message} />
               </>
             )}
             
@@ -511,6 +479,122 @@ export const ThinkingMessage = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// 모든 소스에서 이미지를 병합하여 표시하는 새 컴포넌트
+const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
+  const [allImages, setAllImages] = useState<ImageData[]>([]);
+  const [isProcessed, setIsProcessed] = useState(false);
+  
+  useEffect(() => {
+    if (isProcessed) return;
+    
+    // 모든 이미지 소스에서 이미지 수집
+    const mergedImages: ImageData[] = [];
+    const addedUrls = new Set<string>();
+    
+    // 1. API에서 직접 제공한 이미지 추가
+    if (message.images && message.images.length > 0) {
+      message.images.forEach(img => {
+        // URL에서 캐시 버스팅 매개변수(?t=123456) 제거하고 비교
+        const baseUrl = img.url.split('?')[0];
+        if (!addedUrls.has(baseUrl)) {
+          mergedImages.push(img);
+          addedUrls.add(baseUrl);
+        }
+      });
+    }
+    
+    // 2. 이미지 블록에서 추출
+    if (message.imageBlocks && message.imageBlocks.length > 0) {
+      try {
+        console.log('이미지 블록에서 이미지 추출 시도:', message.imageBlocks.length);
+        const combinedBlockText = message.imageBlocks.join('\n\n');
+        const blockImages = extractImagesFromText(combinedBlockText);
+        
+        blockImages.forEach(img => {
+          const baseUrl = img.url.split('?')[0];
+          if (!addedUrls.has(baseUrl)) {
+            // 이미지 URL 검증 및 캐시 버스팅 추가
+            let validUrl = img.url;
+            
+            // 잘못된 이미지 타입 수정
+            ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
+              if (validUrl.includes(`galaxy_s25_${invalidType}_`)) {
+                validUrl = validUrl.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
+              }
+            });
+            
+            // 캐시 버스팅을 위한 타임스탬프 추가
+            const urlWithTimestamp = validUrl.includes('?') 
+              ? `${validUrl}&t=${Date.now()}` 
+              : `${validUrl}?t=${Date.now()}`;
+              
+            mergedImages.push({
+              ...img,
+              url: urlWithTimestamp
+            });
+            addedUrls.add(baseUrl);
+          }
+        });
+      } catch (error) {
+        console.error('이미지 블록 처리 중 오류:', error);
+      }
+    }
+    
+    // 3. 메시지 텍스트에서 추출
+    if (message.content && 
+        (message.content.includes('[이미지') || message.content.includes('ywvoksfszaelkceectaa.supabase.co'))) {
+      try {
+        const contentImages = extractImagesFromText(message.content);
+        
+        contentImages.forEach(img => {
+          const baseUrl = img.url.split('?')[0];
+          if (!addedUrls.has(baseUrl)) {
+            // 이미지 URL 검증 및 캐시 버스팅 추가
+            let validUrl = img.url;
+            
+            // 잘못된 이미지 타입 수정
+            ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
+              if (validUrl.includes(`galaxy_s25_${invalidType}_`)) {
+                validUrl = validUrl.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
+              }
+            });
+            
+            // 캐시 버스팅을 위한 타임스탬프 추가
+            const urlWithTimestamp = validUrl.includes('?') 
+              ? `${validUrl}&t=${Date.now()}` 
+              : `${validUrl}?t=${Date.now()}`;
+              
+            mergedImages.push({
+              ...img,
+              url: urlWithTimestamp
+            });
+            addedUrls.add(baseUrl);
+          }
+        });
+      } catch (error) {
+        console.error('메시지 텍스트에서 이미지 추출 중 오류:', error);
+      }
+    }
+    
+    console.log(`총 병합된 이미지 수: ${mergedImages.length}`);
+    setAllImages(mergedImages);
+    setIsProcessed(true);
+  }, [message, isProcessed]);
+  
+  if (allImages.length === 0) return null;
+  
+  return (
+    <div className="mt-2">
+      {DEBUG_MESSAGE_IMAGES && (
+        <div className="bg-purple-50 p-2 rounded-md mb-2 text-xs">
+          병합된 이미지 {allImages.length}개
+        </div>
+      )}
+      <ChatImageGallery images={allImages} />
     </div>
   );
 };

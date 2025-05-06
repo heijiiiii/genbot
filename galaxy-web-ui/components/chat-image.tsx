@@ -271,20 +271,6 @@ export function ChatImage({ image }: ChatImageProps) {
           </>
         )}
       </div>
-      <div className="text-xs text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <span>페이지: {image.page || '알 수 없음'}</span>
-          {image.relevance_score && (
-            <span>(관련성: {(image.relevance_score * 100).toFixed(0)}%)</span>
-          )}
-        </div>
-        {DEBUG_IMAGE_LOADING && (
-          <div className="mt-1 text-gray-400">
-            <span>로딩 전략: {loadingStrategy}</span>
-            <span className="ml-2">시도: {retryCount}/{MAX_RETRIES}</span>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
