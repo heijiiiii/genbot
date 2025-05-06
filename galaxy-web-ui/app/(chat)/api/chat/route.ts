@@ -297,19 +297,30 @@ async function saveMessage(chatId: string, role: string, content: string) {
 // 채팅 가져오기
 async function getChatById(chatId: string) {
   try {
+    // 채팅 ID가 없으면 null 반환
+    if (!chatId) {
+      console.log('채팅 ID가 제공되지 않았습니다.');
+      return null;
+    }
+
     const { data, error } = await client
       .from('chats')
       .select('*')
       .eq('id', chatId);
     
     if (error) {
+      // PGRST116 오류 처리 추가
+      if (error.code === 'PGRST116') {
+        console.log(`채팅 ID ${chatId}에 해당하는 결과가 없습니다. PGRST116 오류`);
+        return null;
+      }
       console.error('채팅 가져오기 오류:', error);
       return null;
     }
     
-    // 결과가 없거나 여러 개인 경우 처리
+    // 결과가 없는 경우 처리
     if (!data || data.length === 0) {
-      console.log(`채팅 ID ${chatId}에 해당하는 결과가 없습니다.`);
+      console.log(`채팅 ID ${chatId}에 해당하는 채팅이 없습니다. 빈 배열을 반환합니다`);
       return null;
     }
     
