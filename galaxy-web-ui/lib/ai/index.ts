@@ -88,7 +88,7 @@ export function getProxyImageUrl(originalUrl: string): string {
       console.log('Supabase URL 경로 표준화:', normalizedUrl);
     }
     
-    // 잘못된 이미지 타입 수정
+    // 잘못된 이미지 타입 수정 - 모든 가능한 타입들 처리
     ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
       if (normalizedUrl.includes(`galaxy_s25_${invalidType}_`)) {
         normalizedUrl = normalizedUrl.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
@@ -132,36 +132,71 @@ export function extractImagesFromText(text: string): ImageData[] {
   const images: ImageData[] = [];
   console.log('이미지 추출 시작:', text.substring(0, 200) + '...');
   
-  // 백엔드 응답이 일관된 형태를 가지므로 단순화된 패턴 사용
-  // [이미지 숫자] 다음 줄에 URL이 오는 패턴
-  // 정규식 패턴 개선: URL이 여러 줄에 걸쳐 있거나 공백이 있는 경우도 처리
-  const imagePattern = /\[이미지\s*(\d+)\](?:.*?)(?:\n|\r\n)?(https?:\/\/[^\s\n\?]+(?:\?[^\s\n]*)?)/gi;
+  // 패턴 1: [이미지 숫자] 다음 줄에 URL이 오는 패턴 (괄호와 줄바꿈 제거 추가)
+  const imagePattern1 = /\[이미지\s*(\d+)\](?:.*?)(?:\n|\r\n)?(?:\s*\(?\s*\n?\s*)(https?:\/\/[^\s\n\(\)]+|[^\s\n\(\)]+\.(?:jpg|jpeg|png|gif|webp))(?:\s*\n?\s*\)?\s*)/gi;
   
+  // 패턴 2: [이미지 숫자] 문자열 내에 URL이 직접 포함된 패턴
+  const imagePattern2 = /\[이미지\s*(\d+)\]\s*(?:\(?\s*)(https?:\/\/[^\s\n\(\)]+|[^\s\n\(\)]+\.(?:jpg|jpeg|png|gif|webp))(?:\s*\)?)/gi;
+  
+  // 모든 패턴 시도
+  let allMatches = new Set<string>();
+  
+  // 패턴 1 적용
   let match;
-  while ((match = imagePattern.exec(text)) !== null) {
-    const imageNum = match[1];
-    let imageUrl = match[2].trim();
-    
-    // URL 끝에 물음표(?)가 있으면 제거
-    if (imageUrl.endsWith('?')) {
-      imageUrl = imageUrl.slice(0, -1);
+  while ((match = imagePattern1.exec(text)) !== null) {
+    try {
+      const imageNum = match[1];
+      let imageUrl = match[2].trim();
+      
+      // URL 정규화 - 괄호와 줄바꿈 제거
+      imageUrl = imageUrl.replace(/^\(+|\)+$/g, '').trim();
+      
+      // URL 끝에 물음표(?)가 있으면 제거
+      if (imageUrl.endsWith('?')) {
+        imageUrl = imageUrl.slice(0, -1);
+      }
+      
+      console.log(`패턴1 매치: 이미지 ${imageNum}, URL: ${imageUrl.substring(0, 50)}...`);
+      
+      if (!allMatches.has(imageUrl)) {
+        images.push({
+          url: imageUrl,
+          page: imageNum,
+          relevance_score: 0.9
+        });
+        allMatches.add(imageUrl);
+      }
+    } catch (error) {
+      console.error('패턴1 처리 중 오류:', error);
     }
-    
-    // URL에 중복된 부분이 있는지 확인 (같은 URL이 반복되는 경우)
-    if (imageUrl.includes('https://') && imageUrl.lastIndexOf('https://') > 0) {
-      // 첫 번째 URL만 사용
-      imageUrl = imageUrl.substring(0, imageUrl.lastIndexOf('https://'));
-    }
-    
-    console.log(`이미지 매칭: [${imageNum}] ${imageUrl.substring(0, 100)}...`);
-    
-    // 이미 추가된 URL인지 확인 (중복 방지)
-    if (!images.some(img => img.url === imageUrl)) {
-      images.push({ 
-        url: imageUrl, 
-        page: imageNum, 
-        relevance_score: 0.8
-      });
+  }
+  
+  // 패턴 2 적용
+  while ((match = imagePattern2.exec(text)) !== null) {
+    try {
+      const imageNum = match[1];
+      let imageUrl = match[2].trim();
+      
+      // URL 정규화 - 괄호 제거
+      imageUrl = imageUrl.replace(/^\(+|\)+$/g, '').trim();
+      
+      // URL 끝에 물음표(?)가 있으면 제거
+      if (imageUrl.endsWith('?')) {
+        imageUrl = imageUrl.slice(0, -1);
+      }
+      
+      console.log(`패턴2 매치: 이미지 ${imageNum}, URL: ${imageUrl.substring(0, 50)}...`);
+      
+      if (!allMatches.has(imageUrl)) {
+        images.push({
+          url: imageUrl,
+          page: imageNum,
+          relevance_score: 0.9
+        });
+        allMatches.add(imageUrl);
+      }
+    } catch (error) {
+      console.error('패턴2 처리 중 오류:', error);
     }
   }
   
@@ -173,51 +208,8 @@ export function extractImagesFromText(text: string): ImageData[] {
     });
   }
   
-  // 백업 패턴: [이미지 숫자] 패턴 후 여러 줄에 걸쳐 URL이 있는 경우
-  if (images.length < (text.match(/\[이미지\s*\d+\]/gi)?.length || 0)) {
-    console.log("추가 이미지 패턴 검색 시도");
-    
-    // 텍스트를 [이미지 숫자] 패턴으로 분할
-    const imageSections = text.split(/\[이미지\s*\d+\]/gi);
-    
-    // 첫 번째 섹션은 이미지 전 텍스트이므로 건너뜀
-    for (let i = 1; i < imageSections.length; i++) {
-      const section = imageSections[i];
-      // 이미 추출된 이미지가 있는지 확인
-      if (images.some(img => img.page === String(i))) continue;
-      
-      // URL 패턴 추출 시도
-      const urlMatch = section.match(/(https?:\/\/[^\s\n\?]+(?:\?[^\s\n]*)?)/i);
-      if (urlMatch) {
-        let imageUrl = urlMatch[1].trim();
-        
-        // URL 끝에 물음표(?)가 있으면 제거
-        if (imageUrl.endsWith('?')) {
-          imageUrl = imageUrl.slice(0, -1);
-        }
-        
-        // URL에 중복된 부분이 있는지 확인
-        if (imageUrl.includes('https://') && imageUrl.lastIndexOf('https://') > 0) {
-          imageUrl = imageUrl.substring(0, imageUrl.lastIndexOf('https://'));
-        }
-        
-        console.log(`추가 이미지 발견 [${i}]: ${imageUrl.substring(0, 100)}...`);
-        
-        if (!images.some(img => img.url === imageUrl)) {
-          images.push({
-            url: imageUrl,
-            page: String(i),
-            relevance_score: 0.8
-          });
-        }
-      }
-    }
-    
-    console.log('추가 패턴 후 이미지 수:', images.length);
-  }
-  
   // Supabase URL 직접 추출 (URL이 없는 경우를 위한 백업)
-  if (text.includes('ywvoksfszaelkceectaa.supabase.co')) {
+  if (images.length === 0 && text.includes('ywvoksfszaelkceectaa.supabase.co')) {
     console.log("Supabase URL 직접 추출 시도");
     const directUrlPattern = /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n\?]+/gi;
     
@@ -227,12 +219,13 @@ export function extractImagesFromText(text: string): ImageData[] {
       const imageUrl = urlMatch[0].trim();
       matchCount++;
       
-      if (!images.some(img => img.url === imageUrl)) {
+      if (!allMatches.has(imageUrl)) {
         images.push({ 
           url: imageUrl, 
           page: String(matchCount), 
           relevance_score: 0.5
         });
+        allMatches.add(imageUrl);
       }
     }
     
@@ -240,7 +233,7 @@ export function extractImagesFromText(text: string): ImageData[] {
   }
     
   // 파일명 패턴 기반 URL 생성 - URL 유무와 상관없이 항상 실행
-  // 갤럭시 이미지 파일명 패턴을 찾기 - 더 유연한 패턴으로 수정
+  // 갤럭시 이미지 파일명 패턴을 찾기 - 모든 가능한 타입 포함
   const fileNamePattern = /galaxy_s25_(?:figure|chart|screen|diagram|dual|mode|single|take)_p(\d+)_(?:top|mid|bot)_[a-f0-9]+\.jpg/gi;
   let fileNameMatch;
   
@@ -248,19 +241,27 @@ export function extractImagesFromText(text: string): ImageData[] {
     const fileName = fileNameMatch[0];
     // 페이지 번호 추출 (p다음의 숫자)
     const pageMatch = fileName.match(/_p(\d+)_/i);
-    const page = pageMatch ? pageMatch[1] : '1';
+    const pageNum = pageMatch ? pageMatch[1] : "1";
     
-    console.log(`파일명 패턴 발견: ${fileName}, 페이지: ${page}`);
-    const constructedUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${fileName}`;
+    // 이미지 타입 확인 및 필요시 수정
+    let normalizedFileName = fileName;
+    ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
+      if (normalizedFileName.includes(`galaxy_s25_${invalidType}_`)) {
+        normalizedFileName = normalizedFileName.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
+      }
+    });
     
-    if (!images.some(img => img.url === constructedUrl)) {
+    // 전체 URL 구성
+    const imageUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${normalizedFileName}`;
+    
+    // 이미 추가된 URL이 아닌 경우에만 추가
+    if (!allMatches.has(imageUrl)) {
       images.push({
-        url: constructedUrl,
-        page: page,
-        relevance_score: 0.85
+        url: imageUrl,
+        page: pageNum,
+        relevance_score: 0.7
       });
-      
-      console.log('파일명 패턴 기반 URL 생성:', constructedUrl);
+      allMatches.add(imageUrl);
     }
   }
   

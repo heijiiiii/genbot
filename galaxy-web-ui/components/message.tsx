@@ -494,14 +494,17 @@ function extractAllImagePatterns(text: string): ImageData[] {
   const images: ImageData[] = [];
   const addedUrls = new Set<string>();
   
-  // 패턴 1: [이미지 숫자] 다음 줄에 URL이 오는 패턴
-  const pattern1 = /\[이미지\s*(\d+)\](?:.*?)(?:\n|\r\n)?([^\s\n]*?https?:\/\/[^\s\n]+)/gi;
+  // 패턴 1: [이미지 숫자] 다음 줄에 URL이 오는 패턴 (괄호와 줄바꿈 제거 추가)
+  const pattern1 = /\[이미지\s*(\d+)\](?:.*?)(?:\n|\r\n)?(?:\s*\(?\s*\n?\s*)(https?:\/\/[^\s\n\(\)]+|[^\s\n\(\)]+\.(?:jpg|jpeg|png|gif|webp))(?:\s*\n?\s*\)?\s*)/gi;
   
   // 패턴 2: [이미지 숫자] 문자열 내에 URL이 직접 포함된 패턴
-  const pattern2 = /\[이미지\s*(\d+)\]\s*([^\s\n]*?https?:\/\/[^\s\n]+)/gi;
+  const pattern2 = /\[이미지\s*(\d+)\]\s*(?:\(?\s*)(https?:\/\/[^\s\n\(\)]+|[^\s\n\(\)]+\.(?:jpg|jpeg|png|gif|webp))(?:\s*\)?)/gi;
   
   // 패턴 3: 일반 URL 패턴 (이미지 확장자로 끝나는)
-  const pattern3 = /(https?:\/\/[^\s\n]+\.(?:jpg|jpeg|png|gif|webp)(?:\?[^\s\n]*)?)/gi;
+  const pattern3 = /(?:\(?\s*)(https?:\/\/[^\s\n\(\)]+\.(?:jpg|jpeg|png|gif|webp)(?:\?[^\s\n\(\)]*?)?)(?:\s*\)?)/gi;
+  
+  // 패턴 4: 마크다운 이미지 패턴 ![alt](url)
+  const pattern4 = /!\[[^\]]*\]\((?:\s*)(https?:\/\/[^\s\n\)]+|[^\s\n\)]+\.(?:jpg|jpeg|png|gif|webp))(?:\s*)\)/gi;
   
   // 패턴 1 적용
   let match;
@@ -509,6 +512,9 @@ function extractAllImagePatterns(text: string): ImageData[] {
     try {
       const imageNum = match[1];
       let imageUrl = match[2].trim();
+      
+      // URL 정규화
+      imageUrl = normalizeImageUrl(imageUrl);
       
       console.log(`패턴1 매치: 이미지 ${imageNum}, URL: ${imageUrl.substring(0, 50)}...`);
       
@@ -531,6 +537,9 @@ function extractAllImagePatterns(text: string): ImageData[] {
       const imageNum = match[1];
       let imageUrl = match[2].trim();
       
+      // URL 정규화
+      imageUrl = normalizeImageUrl(imageUrl);
+      
       console.log(`패턴2 매치: 이미지 ${imageNum}, URL: ${imageUrl.substring(0, 50)}...`);
       
       if (!addedUrls.has(imageUrl)) {
@@ -551,6 +560,9 @@ function extractAllImagePatterns(text: string): ImageData[] {
     try {
       let imageUrl = match[1].trim();
       
+      // URL 정규화
+      imageUrl = normalizeImageUrl(imageUrl);
+      
       console.log(`패턴3 매치: URL: ${imageUrl.substring(0, 50)}...`);
       
       if (!addedUrls.has(imageUrl)) {
@@ -566,6 +578,29 @@ function extractAllImagePatterns(text: string): ImageData[] {
     }
   }
   
+  // 패턴 4 적용 (마크다운 이미지)
+  while ((match = pattern4.exec(text)) !== null) {
+    try {
+      let imageUrl = match[1].trim();
+      
+      // URL 정규화
+      imageUrl = normalizeImageUrl(imageUrl);
+      
+      console.log(`패턴4 매치: URL: ${imageUrl.substring(0, 50)}...`);
+      
+      if (!addedUrls.has(imageUrl)) {
+        images.push({
+          url: imageUrl,
+          page: '1',
+          relevance_score: 0.8
+        });
+        addedUrls.add(imageUrl);
+      }
+    } catch (error) {
+      console.error('패턴4 처리 중 오류:', error);
+    }
+  }
+  
   // 발견된 이미지 로깅
   console.log(`총 발견된 고유 이미지 URL: ${images.length}`);
   images.forEach((img, idx) => {
@@ -573,6 +608,29 @@ function extractAllImagePatterns(text: string): ImageData[] {
   });
   
   return images;
+}
+
+/**
+ * 이미지 URL을 정규화하는 함수
+ */
+function normalizeImageUrl(url: string): string {
+  // 괄호와 공백 제거
+  url = url.trim().replace(/^\(+|\)+$/g, '');
+  
+  // URL이 Supabase 파일명만 있는 경우, 전체 URL로 변환
+  if (!url.startsWith('http') && 
+      (url.includes('galaxy_s25_') || url.endsWith('.jpg') || url.endsWith('.png'))) {
+    url = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${url}`;
+  }
+  
+  // 잘못된 이미지 타입 수정
+  ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
+    if (url.includes(`galaxy_s25_${invalidType}_`)) {
+      url = url.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
+    }
+  });
+  
+  return url;
 }
 
 // 모든 소스에서 이미지를 병합하여 표시하는 새 컴포넌트
