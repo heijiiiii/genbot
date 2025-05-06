@@ -422,20 +422,13 @@ export async function POST(request: Request) {
     이미지가 필요한 경우 반드시 아래 형식을 정확히 따라주세요:
     
     [이미지 1]
-    https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/파일명.jpg
-    
-    이미지 형식 규칙:
-    1. [이미지 숫자] 형식의 태그를 반드시 사용하세요 (공백 및 숫자 형식 유지)
-    2. 다음 줄에 URL을 정확히 입력하세요 (줄바꿈 필수)
-    3. URL은 https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/ 형식이어야 합니다
-    4. URL에 이중 슬래시('//')가 아닌 단일 슬래시('/')를 사용해야 합니다
-    5. URL 앞에 @ 문자를 붙이지 마세요
-    6. URL 끝에 ? 문자를 붙이지 마세요
-    
-    사용할 수 있는 이미지 URL 형식의 예:
-    
-    [이미지 1]
-    https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_chart_p43_mid_0fb137a8.jpg
+    https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_[type]_p[page]_[position]_[hash].jpg
+
+    여기서:
+    - [type]: 이미지 유형 (예: chart, figure, diagram, screen 등)
+    - [page]: 페이지 번호 (숫자)
+    - [position]: 이미지 위치 (top, mid, bot)
+    - [hash]: 고유 식별자 (16진수 해시)
 
     *** 매우 중요: 모든 응답에 반드시 위 형식대로 이미지를 포함해야 합니다. 이미지가 없으면 사용자는 시각적 참조를 할 수 없습니다. ***
     `;

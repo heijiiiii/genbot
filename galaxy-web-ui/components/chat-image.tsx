@@ -96,7 +96,8 @@ function getProxiedImageUrl(url: string): string {
     
     // URL 인코딩 - 쿼리 파라미터를 보존하기 위해 URL 자체를 인코딩
     const encodedUrl = encodeURIComponent(normalizedUrl);
-    const proxiedUrl = `/api/proxy-image?url=${encodedUrl}`;
+    // 캐시 버스팅을 위한 타임스탬프 추가
+    const proxiedUrl = `/api/proxy-image?url=${encodedUrl}&t=${Date.now()}`;
     
     if (DEBUG_IMAGE_LOADING) {
       console.log('프록시 URL로 변환됨:', proxiedUrl);

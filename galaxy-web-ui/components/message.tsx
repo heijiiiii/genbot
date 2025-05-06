@@ -41,8 +41,15 @@ interface AutoExtractImagesProps {
 const AutoExtractImages = ({ messageContent, imageBlocks }: AutoExtractImagesProps) => {
   const [extractedImages, setExtractedImages] = useState<ImageData[]>([]);
   const [isExtracted, setIsExtracted] = useState(false);
+  const messageContentRef = useRef(messageContent);
   
   useEffect(() => {
+    // 새로운 메시지 내용이 들어오면 재추출 필요
+    if (messageContent !== messageContentRef.current) {
+      setIsExtracted(false);
+      messageContentRef.current = messageContent;
+    }
+    
     if (isExtracted) return;
     
     try {
@@ -59,7 +66,15 @@ const AutoExtractImages = ({ messageContent, imageBlocks }: AutoExtractImagesPro
             // 중복 제거하며 추가
             blockImages.forEach(img => {
               if (!images.some(existing => existing.url === img.url)) {
-                images.push(img);
+                // 캐시 버스팅을 위한 타임스탬프 추가
+                const urlWithTimestamp = img.url.includes('?') 
+                  ? `${img.url}&t=${Date.now()}` 
+                  : `${img.url}?t=${Date.now()}`;
+                  
+                images.push({
+                  ...img,
+                  url: urlWithTimestamp
+                });
               }
             });
           }
@@ -72,7 +87,18 @@ const AutoExtractImages = ({ messageContent, imageBlocks }: AutoExtractImagesPro
       if (images.length === 0 && messageContent) {
         console.log('전체 메시지에서 이미지 추출 시도');
         const contentImages = extractImagesFromText(messageContent);
-        images = contentImages;
+        
+        // 캐시 버스팅을 위한 타임스탬프 추가
+        images = contentImages.map(img => {
+          const urlWithTimestamp = img.url.includes('?') 
+            ? `${img.url}&t=${Date.now()}` 
+            : `${img.url}?t=${Date.now()}`;
+            
+          return {
+            ...img,
+            url: urlWithTimestamp
+          };
+        });
       }
       
       setExtractedImages(images);
