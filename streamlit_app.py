@@ -145,6 +145,11 @@ if "messages" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+# 세션 ID 초기화 (사용자 식별용)
+if "session_id" not in st.session_state:
+    import uuid
+    st.session_state.session_id = str(uuid.uuid4())
+    
 # 사용자 입력 초기화 키를 위한 변수
 if "input_key" not in st.session_state:
     st.session_state.input_key = 0
@@ -194,26 +199,40 @@ if user_input:
     # 사용자 메시지 추가
     st.session_state.messages.append({"role": "user", "content": user_input})
     
-    # 챗 기록 업데이트
-    st.session_state.chat_history.append({"role": "user", "content": user_input})
-    
     # API 요청
     try:
         with st.spinner("답변 생성 중..."):
             # 디버그 정보 표시 (임시)
             if st.session_state.get("debug_mode", False):
                 st.info(f"요청 URL: {API_ENDPOINT}/chat")
-                st.info(f"요청 데이터: {json.dumps({'message': user_input, 'history': []}, ensure_ascii=False)}")
+                # 전체 히스토리와 현재 메시지를 함께 표시
+                history_display = [{
+                    "role": item["role"], 
+                    "content": item["content"][:50] + "..." if len(item["content"]) > 50 else item["content"]
+                } for item in st.session_state.chat_history]
+                st.info(f"요청 데이터: 현재 메시지: {user_input}, 이전 대화: {json.dumps(history_display, ensure_ascii=False)}")
+            
+            # 챗 히스토리 정리
+            # 이전 대화 내용을 API에 보낼 형식으로 변환
+            formatted_history = []
+            for item in st.session_state.chat_history:
+                if "role" in item and "content" in item:
+                    formatted_history.append({
+                        "role": item["role"],
+                        "content": item["content"]
+                    })
+                elif "user" in item and "ai" in item:
+                    # user와 ai 필드를 포함하는 형식인 경우
+                    formatted_history.append({"role": "user", "content": item["user"]})
+                    formatted_history.append({"role": "assistant", "content": item["ai"]})
             
             # 타임아웃을 더 늘려봅니다
             response = requests.post(
                 f"{API_ENDPOINT}/chat", 
                 json={
                     "message": user_input,
-                    "history": [
-                        {"role": item["role"], "content": item["content"]}
-                        for item in st.session_state.chat_history
-                    ]
+                    "history": formatted_history,
+                    "session_id": st.session_state.session_id
                 },
                 timeout=120  # 타임아웃을 120초로 늘림
             )
@@ -233,8 +252,15 @@ if user_input:
                 
                 st.session_state.messages.append(bot_message)
                 
-                # 챗 기록 업데이트
+                # 챗 기록 업데이트 - 현재 메시지 쌍 추가
+                # 사용자 메시지 추가
+                st.session_state.chat_history.append({"role": "user", "content": user_input})
+                # 봇 응답 추가
                 st.session_state.chat_history.append({"role": "assistant", "content": data["answer"]})
+                
+                # 이력 제한 (최대 20개 메시지로 제한)
+                if len(st.session_state.chat_history) > 20:
+                    st.session_state.chat_history = st.session_state.chat_history[-20:]
                 
                 # 입력 키 증가시켜 새 입력 필드 생성
                 st.session_state.input_key += 1
