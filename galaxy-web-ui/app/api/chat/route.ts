@@ -58,6 +58,25 @@ export async function POST(req: NextRequest) {
       imageBlocks.push(imageBlockMatch[0]);
     }
     
+    // 갤럭시 관련 특정 파일 패턴 검사
+    if (imageBlocks.length === 0) {
+      const galaxyFilePattern = /galaxy_s25_[a-z]+_p(\d+)_(?:top|mid|bot)_[a-f0-9]+\.jpg/gi;
+      let fileNameMatch;
+      
+      while ((fileNameMatch = galaxyFilePattern.exec(data.answer)) !== null) {
+        const fileName = fileNameMatch[0];
+        console.log('갤럭시 이미지 파일 패턴 발견:', fileName);
+        
+        // 파일명에서 페이지 번호 추출 시도
+        const pageMatch = fileName.match(/_p(\d+)_/i);
+        const pageNumber = pageMatch ? pageMatch[1] : '1';
+        
+        // 파일명으로 이미지 블록 생성
+        const fileImageBlock = `[이미지 ${pageNumber}]\nhttps://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${fileName}`;
+        imageBlocks.push(fileImageBlock);
+      }
+    }
+    
     // 1. API가 직접 이미지를 제공하는 경우 사용
     if (data.images && data.images.length > 0) {
       console.log('API에서 제공한 이미지 사용:', data.images.length);

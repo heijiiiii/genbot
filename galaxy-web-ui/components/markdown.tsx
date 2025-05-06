@@ -416,7 +416,7 @@ const isImageUrl = (url: string): boolean => {
   
   // 4. 갤럭시 매뉴얼 관련 이미지 패턴
   const galaxyPatterns = [
-    /galaxy_s25/i,
+    /galaxy_s25_[a-z]+_p(\d+)_(?:top|mid|bot)_[a-f0-9]+\.jpg/i,
     /\/images\/galaxy\//i,
     /\/manual\/images\//i
   ];

@@ -130,9 +130,9 @@ export function extractImagesFromText(text: string): ImageData[] {
     });
   }
   
-  // 백업: Supabase URL 직접 추출 (이미지 태그가 없는 경우)
-  if (images.length === 0 && text.includes('ywvoksfszaelkceectaa.supabase.co')) {
-    console.log("이미지 태그 없음, Supabase URL 직접 추출 시도");
+  // Supabase URL 직접 추출 (URL이 없는 경우를 위한 백업)
+  if (text.includes('ywvoksfszaelkceectaa.supabase.co')) {
+    console.log("Supabase URL 직접 추출 시도");
     const directUrlPattern = /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n?]+/gi;
     
     let urlMatch;
@@ -151,6 +151,31 @@ export function extractImagesFromText(text: string): ImageData[] {
     }
     
     console.log('직접 URL 추출 결과:', images.length);
+  }
+    
+  // 파일명 패턴 기반 URL 생성 - URL 유무와 상관없이 항상 실행
+  // 갤럭시 이미지 파일명 패턴을 찾기 - 더 유연한 패턴으로 수정
+  const fileNamePattern = /galaxy_s25_[a-z]+_p(\d+)_(?:top|mid|bot)_[a-f0-9]+\.jpg/gi;
+  let fileNameMatch;
+  
+  while ((fileNameMatch = fileNamePattern.exec(text)) !== null) {
+    const fileName = fileNameMatch[0];
+    // 페이지 번호 추출 (p다음의 숫자)
+    const pageMatch = fileName.match(/_p(\d+)_/i);
+    const page = pageMatch ? pageMatch[1] : '1';
+    
+    console.log(`파일명 패턴 발견: ${fileName}, 페이지: ${page}`);
+    const constructedUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${fileName}`;
+    
+    if (!images.some(img => img.url === constructedUrl)) {
+      images.push({
+        url: constructedUrl,
+        page: page,
+        relevance_score: 0.85
+      });
+      
+      console.log('파일명 패턴 기반 URL 생성:', constructedUrl);
+    }
   }
   
   return images;

@@ -90,8 +90,10 @@ export function DataStreamHandler({ id }: { id: string }) {
       
       const hasImagePattern = lastMessage.content.includes('[이미지');
       const hasSupabaseUrl = lastMessage.content.includes('ywvoksfszaelkceectaa.supabase.co');
+      // 갤럭시 이미지 파일명 패턴 확인
+      const hasGalaxyFilePattern = /galaxy_s25_[a-z]+_p(\d+)_(?:top|mid|bot)_[a-f0-9]+\.jpg/i.test(lastMessage.content);
       
-      if (hasImagePattern || hasSupabaseUrl) {
+      if (hasImagePattern || hasSupabaseUrl || hasGalaxyFilePattern) {
         console.log('이미지 패턴 발견, 이미지 추출 시도');
         const extractedImages = extractImagesFromText(lastMessage.content);
         
