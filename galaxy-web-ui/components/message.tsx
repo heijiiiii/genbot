@@ -30,7 +30,7 @@ interface MessageWithImages extends UIMessage {
 }
 
 // 디버깅 상수
-const DEBUG_MESSAGE_IMAGES = false;
+const DEBUG_MESSAGE_IMAGES = true;
 
 // 텍스트에서 이미지를 자동으로 추출하는 컴포넌트
 interface AutoExtractImagesProps {
@@ -491,31 +491,53 @@ const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
   useEffect(() => {
     if (isProcessed) return;
     
+    console.log("▶️ MergedImagesDisplay 실행 시작 - 메시지 ID:", message.id);
+    console.log("👀 메시지 내용:", message.content?.substring(0, 100));
+    console.log("🖼️ 메시지에 포함된 이미지 배열:", message.images?.length || 0);
+    console.log("📝 메시지에 포함된 이미지 블록:", message.imageBlocks?.length || 0);
+    console.log("🔍 메시지 내용에 [이미지] 패턴 포함:", message.content?.includes('[이미지') || false);
+    console.log("🔗 메시지 내용에 Supabase URL 포함:", message.content?.includes('ywvoksfszaelkceectaa.supabase.co') || false);
+    
     // 모든 이미지 소스에서 이미지 수집
     const mergedImages: ImageData[] = [];
     const addedUrls = new Set<string>();
     
     // 1. API에서 직접 제공한 이미지 추가
     if (message.images && message.images.length > 0) {
-      message.images.forEach(img => {
+      console.log("📊 API 제공 이미지 처리 시작:", message.images.length);
+      
+      message.images.forEach((img, idx) => {
         // URL에서 캐시 버스팅 매개변수(?t=123456) 제거하고 비교
         const baseUrl = img.url.split('?')[0];
+        console.log(`  이미지 #${idx+1} URL:`, baseUrl);
+        
         if (!addedUrls.has(baseUrl)) {
           mergedImages.push(img);
           addedUrls.add(baseUrl);
+        } else {
+          console.log(`  ⚠️ 중복 URL 무시:`, baseUrl);
         }
       });
+      
+      console.log("📊 API 제공 이미지 처리 완료. 고유 이미지 수:", addedUrls.size);
     }
     
     // 2. 이미지 블록에서 추출
     if (message.imageBlocks && message.imageBlocks.length > 0) {
       try {
-        console.log('이미지 블록에서 이미지 추출 시도:', message.imageBlocks.length);
+        console.log("📑 이미지 블록에서 이미지 추출 시도:", message.imageBlocks.length);
+        console.log("📑 이미지 블록 내용:", message.imageBlocks);
+        
         const combinedBlockText = message.imageBlocks.join('\n\n');
         const blockImages = extractImagesFromText(combinedBlockText);
         
-        blockImages.forEach(img => {
+        console.log("📑 이미지 블록에서 추출된 이미지:", blockImages.length);
+        
+        let newImagesAdded = 0;
+        blockImages.forEach((img, idx) => {
           const baseUrl = img.url.split('?')[0];
+          console.log(`  블록 이미지 #${idx+1} URL:`, baseUrl);
+          
           if (!addedUrls.has(baseUrl)) {
             // 이미지 URL 검증 및 캐시 버스팅 추가
             let validUrl = img.url;
@@ -524,6 +546,7 @@ const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
             ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
               if (validUrl.includes(`galaxy_s25_${invalidType}_`)) {
                 validUrl = validUrl.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
+                console.log(`  🔄 이미지 타입 수정 (${invalidType} -> figure)`);
               }
             });
             
@@ -537,10 +560,15 @@ const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
               url: urlWithTimestamp
             });
             addedUrls.add(baseUrl);
+            newImagesAdded++;
+          } else {
+            console.log(`  ⚠️ 중복 URL 무시:`, baseUrl);
           }
         });
+        
+        console.log("📑 이미지 블록에서 새로 추가된 이미지:", newImagesAdded);
       } catch (error) {
-        console.error('이미지 블록 처리 중 오류:', error);
+        console.error('❌ 이미지 블록 처리 중 오류:', error);
       }
     }
     
@@ -548,10 +576,16 @@ const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
     if (message.content && 
         (message.content.includes('[이미지') || message.content.includes('ywvoksfszaelkceectaa.supabase.co'))) {
       try {
-        const contentImages = extractImagesFromText(message.content);
+        console.log("📝 메시지 텍스트에서 이미지 추출 시도");
         
-        contentImages.forEach(img => {
+        const contentImages = extractImagesFromText(message.content);
+        console.log("📝 텍스트에서 추출된 이미지:", contentImages.length);
+        
+        let newImagesAdded = 0;
+        contentImages.forEach((img, idx) => {
           const baseUrl = img.url.split('?')[0];
+          console.log(`  텍스트 이미지 #${idx+1} URL:`, baseUrl);
+          
           if (!addedUrls.has(baseUrl)) {
             // 이미지 URL 검증 및 캐시 버스팅 추가
             let validUrl = img.url;
@@ -560,6 +594,7 @@ const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
             ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
               if (validUrl.includes(`galaxy_s25_${invalidType}_`)) {
                 validUrl = validUrl.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
+                console.log(`  🔄 이미지 타입 수정 (${invalidType} -> figure)`);
               }
             });
             
@@ -573,20 +608,36 @@ const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
               url: urlWithTimestamp
             });
             addedUrls.add(baseUrl);
+            newImagesAdded++;
+          } else {
+            console.log(`  ⚠️ 중복 URL 무시:`, baseUrl);
           }
         });
+        
+        console.log("📝 텍스트에서 새로 추가된 이미지:", newImagesAdded);
       } catch (error) {
-        console.error('메시지 텍스트에서 이미지 추출 중 오류:', error);
+        console.error('❌ 메시지 텍스트에서 이미지 추출 중 오류:', error);
       }
     }
     
-    console.log(`총 병합된 이미지 수: ${mergedImages.length}`);
+    console.log(`✅ 총 병합된 이미지 수: ${mergedImages.length}`);
+    if (mergedImages.length > 0) {
+      console.log("📌 최종 이미지 목록:");
+      mergedImages.forEach((img, idx) => {
+        console.log(`  이미지 #${idx+1} URL:`, img.url.split('?')[0]);
+      });
+    }
+    
     setAllImages(mergedImages);
     setIsProcessed(true);
   }, [message, isProcessed]);
   
-  if (allImages.length === 0) return null;
+  if (allImages.length === 0) {
+    console.log("⚠️ 표시할 이미지가 없습니다.");
+    return null;
+  }
   
+  console.log("🖼️ 렌더링: 이미지 갤러리 표시", allImages.length);
   return (
     <div className="mt-2">
       {DEBUG_MESSAGE_IMAGES && (
@@ -598,3 +649,4 @@ const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
     </div>
   );
 };
+
