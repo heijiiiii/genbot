@@ -22,6 +22,26 @@ const KNOWN_USER_IDS = [
   "00000000-0000-0000-0000-000000000001"
 ];
 
+// 사용자 ID 매핑 확인 함수
+const getUserIdMapping = async (nextAuthId: string) => {
+  // 1. 매핑 테이블에서 먼저 확인
+  const { data: mapping, error: mappingError } = await client
+    .from('user_mappings')
+    .select('supabase_id')
+    .eq('next_auth_id', nextAuthId)
+    .single();
+
+  if (!mappingError && mapping && mapping.supabase_id) {
+    console.log(`매핑 테이블에서 ID 찾음: ${nextAuthId} -> ${mapping.supabase_id}`);
+    return mapping.supabase_id;
+  }
+
+  // 2. 매핑이 없으면 기본 ID 목록 사용
+  console.log(`매핑 테이블에서 ID를 찾지 못함: ${nextAuthId}. 기본 ID 목록 사용`);
+  const allPossibleIds = [nextAuthId, ...KNOWN_USER_IDS];
+  return allPossibleIds;
+};
+
 export async function GET(request: NextRequest) {
   console.log("===== GET /api/history API 호출됨 =====");
   const { searchParams } = request.nextUrl;
@@ -63,28 +83,26 @@ export async function GET(request: NextRequest) {
     const currentUserId = session.user.id;
     console.log(`현재 사용자 ID: ${currentUserId}`);
     
-    // 먼저 사용자가 존재하는지 확인
-    const { data: userCheck, error: userError } = await client
-      .from('users')
-      .select('id')
-      .eq('id', currentUserId)
-      .single();
-      
-    if (userError) {
-      console.log(`사용자 확인 오류: ${userError.message}`);
-      console.log(`users 테이블에서 user_id=${currentUserId} 검색 실패`);
-    } else {
-      console.log(`사용자 확인 성공: ${userCheck ? "사용자 존재" : "사용자 없음"}`);
-    }
+    // 매핑 테이블을 통해 사용 가능한 사용자 ID 목록 가져오기
+    const userIds = await getUserIdMapping(currentUserId);
+    console.log(`조회할 사용자 ID: ${Array.isArray(userIds) ? userIds.join(', ') : userIds}`);
     
-    // 테이블 스키마 확인
-    console.log(`chats 테이블 필드 확인: 사용자 ID 필드는 'user_id'로 가정`);
-    
+    // 모든 채팅 조회 쿼리 생성
     let query = client
       .from('chats')
-      .select('id, title, created_at, user_id')
-      .eq('user_id', currentUserId) // 현재 사용자의 채팅만 필터링
-      // .gt('created_at', timeFilter) // 시간 필터 제거
+      .select('id, title, created_at, user_id');
+    
+    // 단일 ID인 경우 eq, 다중 ID인 경우 in 사용  
+    if (Array.isArray(userIds)) {
+      query = query.in('user_id', userIds);
+      console.log(`여러 사용자 ID로 채팅 조회 중: ${userIds.length}개 ID`);
+    } else {
+      query = query.eq('user_id', userIds);
+      console.log(`단일 사용자 ID로 채팅 조회 중: ${userIds}`);
+    }
+    
+    // 최신순 정렬 및 제한 적용
+    query = query
       .order('created_at', { ascending: false })
       .limit(limit + 1);
     
