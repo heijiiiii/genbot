@@ -151,6 +151,19 @@ export function ChatImage({ image }: ChatImageProps) {
     if (DEBUG_IMAGE_LOADING) {
       console.log(`이미지 로드 실패 (${loadingStrategy}):`, currentUrl);
     }
+    
+    // 이미지 로드 실패 시 처리 강화
+    if (retryCount >= MAX_RETRIES) {
+      // 모든 재시도 실패 시 기본 대체 이미지로 전환
+      setError('이미지를 불러올 수 없습니다. 기본 이미지로 대체합니다.');
+      setIsLoading(false);
+      
+      // 기본 이미지로 대체 (존재가 확인된 이미지)
+      const fallbackImage = '/images/fallback-image.png'; // 프로젝트 내 로컬 이미지
+      setCurrentUrl(fallbackImage);
+      return;
+    }
+    
     await retryLoading();
   };
   

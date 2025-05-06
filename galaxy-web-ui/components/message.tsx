@@ -29,7 +29,7 @@ interface MessageWithImages extends UIMessage {
 }
 
 // 디버깅 상수
-const DEBUG_MESSAGE_IMAGES = true;
+const DEBUG_MESSAGE_IMAGES = false;
 
 const PurePreviewMessage = ({
   chatId,
@@ -49,77 +49,25 @@ const PurePreviewMessage = ({
   isReadonly: boolean;
 }) => {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
-  const [imagesExtracted, setImagesExtracted] = useState(false);
-  const messageProcessed = useRef(false);
-
-  // 이미지 확인 및 자동 추출 로직
+  
+  // 디버깅을 위한 로그
   useEffect(() => {
-    // 이미 처리된 메시지는 다시 처리하지 않음
-    if (messageProcessed.current || imagesExtracted) return;
-    
-    if (message?.role === 'assistant') {
-      if (DEBUG_MESSAGE_IMAGES) {
-        console.log('메시지 디버깅 - ID:', message.id);
-        console.log('메시지 역할:', message.role);
-        console.log('내용 길이:', message.content?.length || 0);
-        
-        // 내용에 이미지 패턴 및 URL 확인
-        const hasImagePattern = message.content?.includes('[이미지') || false;
-        const hasSupabaseUrl = message.content?.includes('ywvoksfszaelkceectaa.supabase.co') || false;
-        console.log('내용에 [이미지] 패턴 포함 여부:', hasImagePattern);
-        console.log('내용에 Supabase URL 포함 여부:', hasSupabaseUrl);
-        
-        // 메시지에 이미지 배열 확인
-        if (message.images && message.images.length > 0) {
-          console.log('메시지에 이미지 배열 있음:', message.images.length);
-          message.images.forEach((img, idx) => {
-            console.log(`이미지 #${idx+1} URL:`, img.url);
-          });
-          setImagesExtracted(true);
-          messageProcessed.current = true;
-          return;
-        } else {
-          console.log('메시지에 이미지 배열 없음, 자동 추출 시도...');
-        }
-      }
+    if (message?.role === 'assistant' && DEBUG_MESSAGE_IMAGES) {
+      console.log('메시지 디버깅 - ID:', message.id);
+      console.log('메시지 역할:', message.role);
+      console.log('내용 길이:', message.content?.length || 0);
       
-      // 이미지 배열이 없는 경우 내용에서 직접 추출 시도
-      if (!message.images && message.content) {
-        try {
-          const extractedImages = extractImagesFromText(message.content);
-          
-          if (extractedImages && extractedImages.length > 0) {
-            console.log('내용에서 직접 이미지 추출 성공:', extractedImages.length);
-            
-            // 직접 추출된 이미지를 메시지에 추가
-            setMessages((prevMessages) => {
-              const updatedMessages = [...prevMessages];
-              const messageIndex = updatedMessages.findIndex(msg => msg.id === message.id);
-              
-              if (messageIndex !== -1) {
-                const updatedMessage = {
-                  ...updatedMessages[messageIndex],
-                  images: extractedImages
-                };
-                updatedMessages[messageIndex] = updatedMessage;
-              }
-              
-              return updatedMessages;
-            });
-            
-            console.log('메시지에 직접 추출한 이미지 추가됨');
-            setImagesExtracted(true);
-          } else {
-            console.log('내용에서 이미지 추출 실패');
-          }
-        } catch (error) {
-          console.error('이미지 추출 중 오류 발생:', error);
-        }
+      // 이미지 정보 로깅
+      if (message.images && message.images.length > 0) {
+        console.log('메시지에 이미지 배열 있음:', message.images.length);
+        message.images.forEach((img, idx) => {
+          console.log(`이미지 #${idx+1} URL:`, img.url);
+        });
+      } else {
+        console.log('메시지에 이미지 배열 없음');
       }
-      
-      messageProcessed.current = true;
     }
-  }, [message, setMessages, imagesExtracted]);
+  }, [message]);
 
   return (
     <AnimatePresence>
@@ -340,23 +288,11 @@ const PurePreviewMessage = ({
                   <>
                     {DEBUG_MESSAGE_IMAGES && (
                       <div className="bg-blue-50 p-2 rounded-md mb-2 text-xs">
-                        이미지 {message.images.length}개 발견됨
+                        이미지 {message.images.length}개 표시됨
                       </div>
                     )}
                     <ChatImageGallery images={message.images} />
                   </>
-                )}
-                
-                {/* 이미지 배열은 없지만 내용에 이미지 패턴이 있는 경우 디버그 표시 */}
-                {DEBUG_MESSAGE_IMAGES && 
-                 (!message.images || message.images.length === 0) && 
-                 message.content && 
-                 message.content.includes('[이미지') && 
-                 message.content.includes('https://') && (
-                  <div className="bg-yellow-50 p-2 rounded-md mb-2 text-xs">
-                    이미지 패턴이 감지되었지만 이미지를 표시할 수 없습니다.
-                    패턴: {message.content.match(/\[이미지\s*\d+\]/g)?.join(', ')}
-                  </div>
                 )}
               </>
             )}
