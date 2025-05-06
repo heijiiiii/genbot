@@ -48,6 +48,20 @@ function getProxiedImageUrl(url: string): string {
       }
     }
     
+    // URL 끝에 괄호())가 있으면 제거
+    if (url.endsWith(')')) {
+      url = url.slice(0, -1);
+      if (DEBUG_IMAGE_LOADING) {
+        console.log('URL 끝 괄호()) 제거 후:', url);
+      }
+    }
+    
+    // 파일 확장자 뒤에 붙은 괄호 제거 (예: .jpg)의 경우)
+    url = url.replace(/(\.(jpg|jpeg|png|gif|webp))\)/gi, '$1');
+    if (DEBUG_IMAGE_LOADING) {
+      console.log('확장자 뒤 괄호 제거 후 URL:', url);
+    }
+    
     // URL 정규화: 이중 슬래시를 단일 슬래시로 변환 (프로토콜 다음 부분만)
     let normalizedUrl = url.replace(/([^:])\/\/+/g, '$1/');
     

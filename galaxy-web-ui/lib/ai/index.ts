@@ -45,6 +45,16 @@ export function getProxyImageUrl(originalUrl: string): string {
     // 프로토콜 이후의 @ 기호 제거 (예: https://@example.com)
     normalizedUrl = normalizedUrl.replace(/(https?:\/\/)@/gi, '$1');
     
+    // URL 끝에 괄호())가 있으면 제거
+    if (normalizedUrl.endsWith(')')) {
+      normalizedUrl = normalizedUrl.slice(0, -1);
+      console.log('URL 끝 괄호()) 제거 후:', normalizedUrl);
+    }
+    
+    // 파일 확장자 뒤에 붙은 괄호 제거 (예: .jpg)의 경우)
+    normalizedUrl = normalizedUrl.replace(/(\.(jpg|jpeg|png|gif|webp))\)/gi, '$1');
+    console.log('확장자 뒤 괄호 제거 후 URL:', normalizedUrl);
+    
     // 프로토콜이 없는 경우 https를 기본으로 추가
     if (!normalizedUrl.match(/^https?:\/\//i)) {
       normalizedUrl = `https://${normalizedUrl}`;
