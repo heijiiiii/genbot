@@ -427,6 +427,14 @@ export async function POST(request: Request) {
     
     [이미지 1]
     https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_[type]_p[page]_[position]_[hash].jpg
+    
+    여러 이미지를 포함할 경우 다음과 같이 각 이미지에 번호를 부여하세요:
+    
+    [이미지 1]
+    https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_[type]_p[page]_[position]_[hash].jpg
+    
+    [이미지 2]
+    https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_[type]_p[page]_[position]_[hash].jpg
 
     여기서:
     - [type]: 이미지 유형 (사용 가능한 타입: chart, figure만 허용됨)
@@ -436,6 +444,7 @@ export async function POST(request: Request) {
 
     *** 중요: 관련 내용에 대한 이미지가 있을 경우 포함해주세요. 모든 응답에 이미지가 필요한 것은 아닙니다. ***
     *** 중요: 유효한 이미지 타입은 chart와 figure만 사용 가능합니다. screen이나 diagram 등 다른 타입은 사용하지 마세요. ***
+    *** 중요: 한 응답에 여러 이미지가 필요한 경우 [이미지 1], [이미지 2]와 같이 번호를 순차적으로 증가시켜 사용하세요. ***
     
     사용 가능한 실제 이미지 목록 (실제 존재하는 파일만 사용하세요):
     galaxy_s25_figure_p5_mid_66ed6d2a.jpg

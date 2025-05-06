@@ -483,6 +483,98 @@ export const ThinkingMessage = () => {
   );
 };
 
+/**
+ * 모든 이미지 패턴과 URL을 추출하는 함수
+ * 백엔드에서 제공하는 여러 이미지 패턴([이미지 1], [이미지 2] 등)을 모두 찾습니다.
+ */
+function extractAllImagePatterns(text: string): ImageData[] {
+  if (!text) return [];
+  
+  console.log('모든 이미지 패턴 추출 시작 - 텍스트 길이:', text.length);
+  const images: ImageData[] = [];
+  const addedUrls = new Set<string>();
+  
+  // 패턴 1: [이미지 숫자] 다음 줄에 URL이 오는 패턴
+  const pattern1 = /\[이미지\s*(\d+)\](?:.*?)(?:\n|\r\n)?([^\s\n]*?https?:\/\/[^\s\n]+)/gi;
+  
+  // 패턴 2: [이미지 숫자] 문자열 내에 URL이 직접 포함된 패턴
+  const pattern2 = /\[이미지\s*(\d+)\]\s*([^\s\n]*?https?:\/\/[^\s\n]+)/gi;
+  
+  // 패턴 3: 일반 URL 패턴 (이미지 확장자로 끝나는)
+  const pattern3 = /(https?:\/\/[^\s\n]+\.(?:jpg|jpeg|png|gif|webp)(?:\?[^\s\n]*)?)/gi;
+  
+  // 패턴 1 적용
+  let match;
+  while ((match = pattern1.exec(text)) !== null) {
+    try {
+      const imageNum = match[1];
+      let imageUrl = match[2].trim();
+      
+      console.log(`패턴1 매치: 이미지 ${imageNum}, URL: ${imageUrl.substring(0, 50)}...`);
+      
+      if (!addedUrls.has(imageUrl)) {
+        images.push({
+          url: imageUrl,
+          page: imageNum,
+          relevance_score: 0.9
+        });
+        addedUrls.add(imageUrl);
+      }
+    } catch (error) {
+      console.error('패턴1 처리 중 오류:', error);
+    }
+  }
+  
+  // 패턴 2 적용
+  while ((match = pattern2.exec(text)) !== null) {
+    try {
+      const imageNum = match[1];
+      let imageUrl = match[2].trim();
+      
+      console.log(`패턴2 매치: 이미지 ${imageNum}, URL: ${imageUrl.substring(0, 50)}...`);
+      
+      if (!addedUrls.has(imageUrl)) {
+        images.push({
+          url: imageUrl,
+          page: imageNum,
+          relevance_score: 0.9
+        });
+        addedUrls.add(imageUrl);
+      }
+    } catch (error) {
+      console.error('패턴2 처리 중 오류:', error);
+    }
+  }
+  
+  // 패턴 3 적용
+  while ((match = pattern3.exec(text)) !== null) {
+    try {
+      let imageUrl = match[1].trim();
+      
+      console.log(`패턴3 매치: URL: ${imageUrl.substring(0, 50)}...`);
+      
+      if (!addedUrls.has(imageUrl)) {
+        images.push({
+          url: imageUrl,
+          page: '1', // 기본 페이지 번호
+          relevance_score: 0.7
+        });
+        addedUrls.add(imageUrl);
+      }
+    } catch (error) {
+      console.error('패턴3 처리 중 오류:', error);
+    }
+  }
+  
+  // 발견된 이미지 로깅
+  console.log(`총 발견된 고유 이미지 URL: ${images.length}`);
+  images.forEach((img, idx) => {
+    console.log(`  발견된 이미지 ${idx+1}: ${img.url.substring(0, 50)}... (페이지: ${img.page})`);
+  });
+  
+  return images;
+}
+
 // 모든 소스에서 이미지를 병합하여 표시하는 새 컴포넌트
 const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
   const [allImages, setAllImages] = useState<ImageData[]>([]);
@@ -496,7 +588,7 @@ const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
     console.log("🖼️ 메시지에 포함된 이미지 배열:", message.images?.length || 0);
     console.log("📝 메시지에 포함된 이미지 블록:", message.imageBlocks?.length || 0);
     console.log("🔍 메시지 내용에 [이미지] 패턴 포함:", message.content?.includes('[이미지') || false);
-    console.log("🔗 메시지 내용에 Supabase URL 포함:", message.content?.includes('ywvoksfszaelkceectaa.supabase.co') || false);
+    console.log("🔗 메시지 내용에 Supabase URL 포함:", message.content?.includes('supabase.co') || false);
     
     // 모든 이미지 소스에서 이미지 수집
     const mergedImages: ImageData[] = [];
@@ -504,149 +596,82 @@ const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
     
     // 1. API에서 직접 제공한 이미지 추가
     if (message.images && message.images.length > 0) {
-      console.log("📊 API 제공 이미지 처리 시작:", message.images.length);
-      
-      message.images.forEach((img, idx) => {
-        // URL에서 캐시 버스팅 매개변수(?t=123456) 제거하고 비교
-        const baseUrl = img.url.split('?')[0];
-        console.log(`  이미지 #${idx+1} URL:`, baseUrl);
-        
-        if (!addedUrls.has(baseUrl)) {
+      message.images.forEach(img => {
+        if (!addedUrls.has(img.url)) {
           mergedImages.push(img);
-          addedUrls.add(baseUrl);
-        } else {
-          console.log(`  ⚠️ 중복 URL 무시:`, baseUrl);
+          addedUrls.add(img.url);
+        }
+      });
+    }
+    
+    // 2. 이미지 블록에서 추출한 이미지 추가
+    if (message.imageBlocks && message.imageBlocks.length > 0) {
+      message.imageBlocks.forEach(block => {
+        // 이미지 URL 추출 로직 (Supabase URL 등)
+        // 기존 함수와 함께 새로운 함수도 사용
+        const blockImages = extractImagesFromText(block);
+        blockImages.forEach(img => {
+          if (!addedUrls.has(img.url)) {
+            mergedImages.push(img);
+            addedUrls.add(img.url);
+          }
+        });
+        
+        // 추가: 새로운 패턴 추출 함수 사용
+        const additionalImages = extractAllImagePatterns(block);
+        additionalImages.forEach(img => {
+          if (!addedUrls.has(img.url)) {
+            mergedImages.push(img);
+            addedUrls.add(img.url);
+          }
+        });
+      });
+    }
+    
+    // 3. 텍스트 내용에서 직접 URL 추출 (이미지 패턴 사용)
+    if (message.content) {
+      // 기존 방식: extractImagesFromText 사용
+      const contentImages = extractImagesFromText(message.content);
+      contentImages.forEach(img => {
+        if (!addedUrls.has(img.url)) {
+          mergedImages.push(img);
+          addedUrls.add(img.url);
         }
       });
       
-      console.log("📊 API 제공 이미지 처리 완료. 고유 이미지 수:", addedUrls.size);
+      // 추가: 새로운 패턴 추출 함수 사용
+      const additionalImages = extractAllImagePatterns(message.content);
+      additionalImages.forEach(img => {
+        if (!addedUrls.has(img.url)) {
+          mergedImages.push(img);
+          addedUrls.add(img.url);
+        }
+      });
     }
     
-    // 2. 이미지 블록에서 추출
-    if (message.imageBlocks && message.imageBlocks.length > 0) {
-      try {
-        console.log("📑 이미지 블록에서 이미지 추출 시도:", message.imageBlocks.length);
-        console.log("📑 이미지 블록 내용:", message.imageBlocks);
-        
-        const combinedBlockText = message.imageBlocks.join('\n\n');
-        const blockImages = extractImagesFromText(combinedBlockText);
-        
-        console.log("📑 이미지 블록에서 추출된 이미지:", blockImages.length);
-        
-        let newImagesAdded = 0;
-        blockImages.forEach((img, idx) => {
-          const baseUrl = img.url.split('?')[0];
-          console.log(`  블록 이미지 #${idx+1} URL:`, baseUrl);
-          
-          if (!addedUrls.has(baseUrl)) {
-            // 이미지 URL 검증 및 캐시 버스팅 추가
-            let validUrl = img.url;
-            
-            // 잘못된 이미지 타입 수정
-            ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
-              if (validUrl.includes(`galaxy_s25_${invalidType}_`)) {
-                validUrl = validUrl.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
-                console.log(`  🔄 이미지 타입 수정 (${invalidType} -> figure)`);
-              }
-            });
-            
-            // 캐시 버스팅을 위한 타임스탬프 추가
-            const urlWithTimestamp = validUrl.includes('?') 
-              ? `${validUrl}&t=${Date.now()}` 
-              : `${validUrl}?t=${Date.now()}`;
-              
-            mergedImages.push({
-              ...img,
-              url: urlWithTimestamp
-            });
-            addedUrls.add(baseUrl);
-            newImagesAdded++;
-          } else {
-            console.log(`  ⚠️ 중복 URL 무시:`, baseUrl);
-          }
-        });
-        
-        console.log("📑 이미지 블록에서 새로 추가된 이미지:", newImagesAdded);
-      } catch (error) {
-        console.error('❌ 이미지 블록 처리 중 오류:', error);
-      }
-    }
-    
-    // 3. 메시지 텍스트에서 추출
-    if (message.content && 
-        (message.content.includes('[이미지') || message.content.includes('ywvoksfszaelkceectaa.supabase.co'))) {
-      try {
-        console.log("📝 메시지 텍스트에서 이미지 추출 시도");
-        
-        const contentImages = extractImagesFromText(message.content);
-        console.log("📝 텍스트에서 추출된 이미지:", contentImages.length);
-        
-        let newImagesAdded = 0;
-        contentImages.forEach((img, idx) => {
-          const baseUrl = img.url.split('?')[0];
-          console.log(`  텍스트 이미지 #${idx+1} URL:`, baseUrl);
-          
-          if (!addedUrls.has(baseUrl)) {
-            // 이미지 URL 검증 및 캐시 버스팅 추가
-            let validUrl = img.url;
-            
-            // 잘못된 이미지 타입 수정
-            ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
-              if (validUrl.includes(`galaxy_s25_${invalidType}_`)) {
-                validUrl = validUrl.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
-                console.log(`  🔄 이미지 타입 수정 (${invalidType} -> figure)`);
-              }
-            });
-            
-            // 캐시 버스팅을 위한 타임스탬프 추가
-            const urlWithTimestamp = validUrl.includes('?') 
-              ? `${validUrl}&t=${Date.now()}` 
-              : `${validUrl}?t=${Date.now()}`;
-              
-            mergedImages.push({
-              ...img,
-              url: urlWithTimestamp
-            });
-            addedUrls.add(baseUrl);
-            newImagesAdded++;
-          } else {
-            console.log(`  ⚠️ 중복 URL 무시:`, baseUrl);
-          }
-        });
-        
-        console.log("📝 텍스트에서 새로 추가된 이미지:", newImagesAdded);
-      } catch (error) {
-        console.error('❌ 메시지 텍스트에서 이미지 추출 중 오류:', error);
-      }
-    }
-    
-    console.log(`✅ 총 병합된 이미지 수: ${mergedImages.length}`);
+    console.log("✅ 총 병합된 이미지 수:", mergedImages.length);
     if (mergedImages.length > 0) {
-      console.log("📌 최종 이미지 목록:");
+      console.log("📸 첫 번째 이미지 URL:", mergedImages[0].url);
       mergedImages.forEach((img, idx) => {
-        console.log(`  이미지 #${idx+1} URL:`, img.url.split('?')[0]);
+        console.log(`  🖼️ 이미지 ${idx + 1}:`, img.url);
       });
     }
     
     setAllImages(mergedImages);
     setIsProcessed(true);
-  }, [message, isProcessed]);
-  
+  }, [message.content, message.id, message.imageBlocks, message.images, isProcessed]);
+
+  // 실제 렌더링 부분
   if (allImages.length === 0) {
     console.log("⚠️ 표시할 이미지가 없습니다.");
     return null;
   }
   
-  console.log("🖼️ 렌더링: 이미지 갤러리 표시", allImages.length);
+  console.log(`🖼️🖼️🖼️ 이미지 ${allImages.length}개 렌더링 시작`);
+  
   return (
-    <div className="mt-2">
-      {DEBUG_MESSAGE_IMAGES && (
-        <div className="bg-purple-50 p-2 rounded-md mb-2 text-xs">
-          병합된 이미지 {allImages.length}개
-        </div>
-      )}
+    <div className="mt-4">
       <ChatImageGallery images={allImages} />
     </div>
   );
 };
-
