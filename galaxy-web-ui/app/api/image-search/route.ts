@@ -19,7 +19,6 @@ export async function POST(request: Request) {
     console.log('이미지 검색 요청:', query);
 
     // 백엔드 API 호출 (렌더 서버)
-    // API_BASE_URL 대신 렌더 백엔드 직접 호출
     const backendUrl = `${RENDER_BACKEND_URL}/image-search`;
     console.log('백엔드 호출 URL:', backendUrl);
 
@@ -40,27 +39,23 @@ export async function POST(request: Request) {
         );
       }
 
+      // 백엔드 응답을 그대로 반환
       const data = await response.json();
       console.log('이미지 검색 결과:', {
         success: !!data,
         imageCount: data.images?.length || 0
       });
 
-      // 이미지 응답이 없거나 형식이 잘못된 경우 처리
-      if (!data || !data.images) {
-        // 기본 이미지 제공
-        const defaultImages: ImageData[] = [
-          {
-            url: 'https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_figure_p14_mid_de9837a9.jpg',
-            page: '14',
-            relevance_score: 0.8
+      // URL 끝에 괄호가 있으면 제거 (유일한 처리)
+      if (data.images && Array.isArray(data.images)) {
+        data.images = data.images.map((img: ImageData) => {
+          if (img.url && img.url.endsWith(')')) {
+            return {
+              ...img,
+              url: img.url.slice(0, -1)
+            };
           }
-        ];
-
-        return NextResponse.json({
-          images: defaultImages,
-          fallback: true,
-          message: '관련 이미지를 찾을 수 없어 기본 이미지를 제공합니다.'
+          return img;
         });
       }
 
@@ -68,18 +63,9 @@ export async function POST(request: Request) {
     } catch (error) {
       console.error('백엔드 API 호출 중 오류:', error);
       
-      // 오류 발생 시 기본 이미지 제공
-      const fallbackImages: ImageData[] = [
-        {
-          url: 'https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_figure_p14_mid_de9837a9.jpg',
-          page: '14',
-          relevance_score: 0.8
-        }
-      ];
-
+      // 오류 발생 시 빈 배열 반환
       return NextResponse.json({
-        images: fallbackImages,
-        fallback: true,
+        images: [],
         error: `백엔드 연결 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`
       });
     }

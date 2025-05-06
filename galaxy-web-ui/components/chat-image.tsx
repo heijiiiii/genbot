@@ -26,90 +26,16 @@ function getProxiedImageUrl(url: string): string {
   if (url.includes('/api/proxy-image')) return url;
   
   try {
-    // URL에서 @ 기호 제거 (선행 @ 기호 제거)
-    if (url.startsWith('@')) {
-      url = url.substring(1);
-      if (DEBUG_IMAGE_LOADING) {
-        console.log('선행 @ 기호 제거 후 URL:', url);
-      }
-    }
-    
-    // 프로토콜 이후의 @ 기호 제거 (예: https://@example.com)
-    url = url.replace(/(https?:\/\/)@/gi, '$1');
-    if (DEBUG_IMAGE_LOADING) {
-      console.log('프로토콜 이후 @ 기호 제거 후 URL:', url);
-    }
-    
-    // URL 끝에 ? 기호 제거
-    if (url.endsWith('?')) {
-      url = url.slice(0, -1);
-      if (DEBUG_IMAGE_LOADING) {
-        console.log('URL 끝 ? 기호 제거 후:', url);
-      }
-    }
-    
-    // URL 끝에 괄호())가 있으면 제거
+    // URL 끝의 괄호 제거 (가장 큰 문제 해결)
     if (url.endsWith(')')) {
       url = url.slice(0, -1);
       if (DEBUG_IMAGE_LOADING) {
-        console.log('URL 끝 괄호()) 제거 후:', url);
-      }
-    }
-    
-    // 파일 확장자 뒤에 붙은 괄호 제거 (예: .jpg)의 경우)
-    url = url.replace(/(\.(jpg|jpeg|png|gif|webp))\)/gi, '$1');
-    if (DEBUG_IMAGE_LOADING) {
-      console.log('확장자 뒤 괄호 제거 후 URL:', url);
-    }
-    
-    // URL 정규화: 이중 슬래시를 단일 슬래시로 변환 (프로토콜 다음 부분만)
-    let normalizedUrl = url.replace(/([^:])\/\/+/g, '$1/');
-    
-    // 추가 처리: 'https://@' 패턴 수정
-    normalizedUrl = normalizedUrl.replace(/(https?:\/\/)@/gi, '$1');
-    
-    // 추가: 프로토콜이 없는 URL에 https 추가
-    if (!normalizedUrl.match(/^https?:\/\//i)) {
-      normalizedUrl = `https://${normalizedUrl}`;
-      if (DEBUG_IMAGE_LOADING) {
-        console.log('프로토콜 추가됨:', normalizedUrl);
-      }
-    }
-    
-    // Supabase URL 특별 처리 - 도메인 경로 표준화
-    if (normalizedUrl.includes('supabase.co')) {
-      // storage/v1 경로 중복 제거
-      normalizedUrl = normalizedUrl.replace(/(storage\/v1\/+).*?(storage\/v1\/+)/i, '$1');
-      
-      // object/public 경로 중복 제거
-      normalizedUrl = normalizedUrl.replace(/(object\/public\/+).*?(object\/public\/+)/i, '$1');
-      
-      if (DEBUG_IMAGE_LOADING) {
-        console.log('Supabase URL 경로 표준화:', normalizedUrl);
-      }
-    }
-    
-    // 디버깅 로그
-    if (DEBUG_IMAGE_LOADING && normalizedUrl !== url) {
-      console.log('URL 정규화됨:', normalizedUrl);
-    }
-    
-    // URL 유효성 검사 시도
-    try {
-      // URL 객체 생성 시도 (잘못된 URL은 예외 발생)
-      new URL(normalizedUrl);
-    } catch (urlError) {
-      console.error('잘못된 URL 형식:', normalizedUrl, urlError);
-      // URL 복구 시도 - 기본 Supabase URL 패턴이면 가정하고 수정
-      if (normalizedUrl.includes('supabase.co')) {
-        normalizedUrl = 'https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/' + 
-          normalizedUrl.split('/').pop();
-        console.log('URL 복구 시도:', normalizedUrl);
+        console.log('URL 끝 괄호 제거 후:', url);
       }
     }
     
     // URL 인코딩 - 쿼리 파라미터를 보존하기 위해 URL 자체를 인코딩
-    const encodedUrl = encodeURIComponent(normalizedUrl);
+    const encodedUrl = encodeURIComponent(url);
     // 캐시 버스팅을 위한 타임스탬프 추가
     const proxiedUrl = `/api/proxy-image?url=${encodedUrl}&t=${Date.now()}`;
     
@@ -206,87 +132,10 @@ export function ChatImage({ image }: ChatImageProps) {
       console.log(`이미지 로드 실패 (${loadingStrategy}):`, currentUrl);
     }
     
-    // 파일명이 존재하는 이미지 목록과 일치하는지 확인
-    const existingImageCheck = () => {
-      const imageListPattern = /galaxy_s25_(?:figure|chart)_p\d+_(?:top|mid|bot)_[a-f0-9]+\.jpg/;
-      const url = originalUrl.toLowerCase();
-      
-      // 이미지 URL에서 파일명 추출
-      const filenameMatch = url.match(/([^\/]+\.jpg)(?:\?|$)/i);
-      if (filenameMatch && filenameMatch[1]) {
-        const filename = filenameMatch[1];
-        
-        // 실제 존재하는 이미지 파일명 패턴 확인
-        if (!imageListPattern.test(filename)) {
-          console.warn('존재하지 않는 이미지 패턴:', filename);
-          return false;
-        }
-        
-        if (DEBUG_IMAGE_LOADING) {
-          console.log('이미지 파일명 패턴 확인 완료:', filename);
-        }
-      }
-      return true;
-    };
-    
-    // 이미지 타입 검사 - screen 타입이나 diagram 타입은 존재하지 않음
-    const invalidImageType = originalUrl.includes('galaxy_s25_screen_') || originalUrl.includes('galaxy_s25_diagram_');
-    if (invalidImageType) {
-      console.warn('유효하지 않은 이미지 타입:', originalUrl);
-      // 유사한 이미지로 대체 시도 (figure로 변경)
-      let replacedUrl = originalUrl;
-      if (originalUrl.includes('galaxy_s25_screen_')) {
-        replacedUrl = originalUrl.replace('galaxy_s25_screen_', 'galaxy_s25_figure_');
-      } else if (originalUrl.includes('galaxy_s25_diagram_')) {
-        replacedUrl = originalUrl.replace('galaxy_s25_diagram_', 'galaxy_s25_figure_');
-      }
-      
-      if (DEBUG_IMAGE_LOADING) {
-        console.log('이미지 타입 대체 시도:', replacedUrl);
-      }
-      
-      // 대체된 URL로 변경
-      setCurrentUrl(getProxiedImageUrl(replacedUrl));
-      return;
-    }
-    
-    // 이미지 로드 실패 시 처리 강화
-    if (retryCount >= MAX_RETRIES || !existingImageCheck()) {
-      // 모든 재시도 실패 시 기본 대체 이미지로 전환
-      setError('이미지를 불러올 수 없어 기본 이미지로 대체합니다.');
+    // 간단한 재시도 로직만 유지
+    if (retryCount >= MAX_RETRIES) {
+      setError('이미지를 불러올 수 없습니다.');
       setIsLoading(false);
-      
-      // 기본 이미지로 대체 (존재가 확인된 이미지)
-      // 원본 URL에서 타입과 페이지 정보 추출 시도
-      try {
-        const typeMatch = originalUrl.match(/galaxy_s25_([a-z]+)_p(\d+)/i);
-        let fallbackType = 'figure';
-        let fallbackPage = '14';
-        
-        if (typeMatch) {
-          if (['chart', 'figure'].includes(typeMatch[1].toLowerCase())) {
-            fallbackType = typeMatch[1].toLowerCase();
-          }
-          // 페이지 번호 추출
-          const pageNum = parseInt(typeMatch[2], 10);
-          // 유효한 페이지 범위인지 확인 (1-150)
-          if (pageNum > 0 && pageNum <= 150) {
-            fallbackPage = typeMatch[2];
-          }
-        }
-        
-        // 존재가 확인된 이미지 중 하나를 선택
-        const fallbackUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_${fallbackType}_p${fallbackPage}_mid_de9837a9.jpg`;
-        setCurrentUrl(getProxiedImageUrl(fallbackUrl));
-        
-        if (DEBUG_IMAGE_LOADING) {
-          console.log('대체 이미지로 전환:', fallbackUrl);
-        }
-      } catch (e) {
-        // 오류 시 가장 기본적인 대체 이미지 사용
-        const defaultFallbackUrl = 'https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/galaxy_s25_figure_p14_mid_de9837a9.jpg';
-        setCurrentUrl(getProxiedImageUrl(defaultFallbackUrl));
-      }
       return;
     }
     
