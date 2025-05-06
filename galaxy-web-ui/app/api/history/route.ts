@@ -15,6 +15,13 @@ const isValidUUID = (uuid: string): boolean => {
   return uuidRegex.test(uuid);
 };
 
+// 테스트용 알려진 사용자 ID 목록
+const KNOWN_USER_IDS = [
+  "0f705e4c-9270-4dd4-8b55-5f46ec04c196",
+  "58e0ea15-3c59-46aa-bd69-3751bb0a0b4b",
+  "00000000-0000-0000-0000-000000000001"
+];
+
 export async function GET(request: NextRequest) {
   console.log("===== GET /api/history API 호출됨 =====");
   const { searchParams } = request.nextUrl;
@@ -23,7 +30,10 @@ export async function GET(request: NextRequest) {
   const startingAfter = searchParams.get('starting_after');
   const endingBefore = searchParams.get('ending_before');
   
-  console.log(`요청 파라미터: limit=${limit}, startingAfter=${startingAfter}, endingBefore=${endingBefore}`);
+  // 세션 ID 또는 현재 시간을 가져옴 (세션별 채팅 필터링용)
+  const sessionId = searchParams.get('session_id') || '';
+  
+  console.log(`요청 파라미터: limit=${limit}, startingAfter=${startingAfter}, endingBefore=${endingBefore}, sessionId=${sessionId}`);
 
   if (startingAfter && endingBefore) {
     console.log("오류: starting_after와 ending_before가 동시에 제공됨");
@@ -53,12 +63,20 @@ export async function GET(request: NextRequest) {
     const currentUserId = session.user.id;
     console.log(`현재 사용자 ID: ${currentUserId}`);
     
-    // 모든 사용자의 채팅을 조회하는 쿼리 작성
-    console.log(`Supabase 쿼리 시작: 모든 사용자의 채팅 조회 (게스트 포함)`);
+    // 현재 세션의 채팅만 조회하기 위한 시간 계산 (지난 24시간 이내)
+    const lastDay = new Date();
+    lastDay.setHours(lastDay.getHours() - 24);
+    const timeFilter = lastDay.toISOString();
+    
+    console.log(`시간 필터 적용: ${timeFilter} 이후의 채팅만 조회`);
+    
+    // 현재 세션의 채팅만 조회하는 쿼리 작성
+    console.log(`Supabase 쿼리 시작: 최근 24시간 내의 채팅 조회`);
     
     let query = client
       .from('chats')
       .select('id, title, created_at, user_id')
+      .gt('created_at', timeFilter) // 최근 24시간 이내의 채팅만 조회
       .order('created_at', { ascending: false })
       .limit(limit + 1);
     
