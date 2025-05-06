@@ -40,7 +40,6 @@ export function ChatImageGallery({ images }: { images: ImageData[] }) {
   
   return (
     <div className="flex flex-col gap-4 mt-4 w-full">
-      <h3 className="text-sm font-medium">관련 이미지 ({images.length}개)</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {images.map((image, index) => (
           <ChatImage key={`${image.url}-${index}`} image={image} />

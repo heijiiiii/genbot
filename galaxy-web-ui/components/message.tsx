@@ -60,37 +60,38 @@ const AutoExtractImages = ({ messageContent, imageBlocks }: AutoExtractImagesPro
       if (imageBlocks && imageBlocks.length > 0) {
         console.log('이미지 블록에서 이미지 추출 시도:', imageBlocks.length);
         
-        imageBlocks.forEach(block => {
-          const blockImages = extractImagesFromText(block);
-          if (blockImages.length > 0) {
-            // 중복 제거하며 추가
-            blockImages.forEach(img => {
-              if (!images.some(existing => existing.url === img.url)) {
-                // 이미지 URL 검증 - 존재하는 타입인지 확인
-                let validUrl = img.url;
-                if (validUrl.includes('galaxy_s25_screen_')) {
-                  // screen 타입이 있으면 figure로 대체
-                  validUrl = validUrl.replace('galaxy_s25_screen_', 'galaxy_s25_figure_');
-                  console.log('이미지 타입 수정 (screen -> figure):', validUrl);
-                } else if (validUrl.includes('galaxy_s25_diagram_')) {
-                  // diagram 타입이 있으면 figure로 대체
-                  validUrl = validUrl.replace('galaxy_s25_diagram_', 'galaxy_s25_figure_');
-                  console.log('이미지 타입 수정 (diagram -> figure):', validUrl);
-                }
-                
-                // 캐시 버스팅을 위한 타임스탬프 추가
-                const urlWithTimestamp = validUrl.includes('?') 
-                  ? `${validUrl}&t=${Date.now()}` 
-                  : `${validUrl}?t=${Date.now()}`;
-                  
-                images.push({
-                  ...img,
-                  url: urlWithTimestamp
-                });
+        // 모든 이미지 블록을 하나의 텍스트로 결합하여 처리
+        const combinedBlockText = imageBlocks.join('\n\n');
+        const blockImages = extractImagesFromText(combinedBlockText);
+        
+        if (blockImages.length > 0) {
+          // 중복 제거하며 추가
+          blockImages.forEach(img => {
+            if (!images.some(existing => existing.url === img.url)) {
+              // 이미지 URL 검증 - 존재하는 타입인지 확인
+              let validUrl = img.url;
+              if (validUrl.includes('galaxy_s25_screen_')) {
+                // screen 타입이 있으면 figure로 대체
+                validUrl = validUrl.replace('galaxy_s25_screen_', 'galaxy_s25_figure_');
+                console.log('이미지 타입 수정 (screen -> figure):', validUrl);
+              } else if (validUrl.includes('galaxy_s25_diagram_')) {
+                // diagram 타입이 있으면 figure로 대체
+                validUrl = validUrl.replace('galaxy_s25_diagram_', 'galaxy_s25_figure_');
+                console.log('이미지 타입 수정 (diagram -> figure):', validUrl);
               }
-            });
-          }
-        });
+              
+              // 캐시 버스팅을 위한 타임스탬프 추가
+              const urlWithTimestamp = validUrl.includes('?') 
+                ? `${validUrl}&t=${Date.now()}` 
+                : `${validUrl}?t=${Date.now()}`;
+                
+              images.push({
+                ...img,
+                url: urlWithTimestamp
+              });
+            }
+          });
+        }
         
         console.log('이미지 블록에서 추출된 이미지:', images.length);
       }
@@ -101,7 +102,7 @@ const AutoExtractImages = ({ messageContent, imageBlocks }: AutoExtractImagesPro
         const contentImages = extractImagesFromText(messageContent);
         
         // 이미지 타입 검증 및 캐시 버스팅
-        images = contentImages.map(img => {
+        contentImages.forEach(img => {
           let validUrl = img.url;
           
           // 이미지 타입 검사 및 대체
@@ -132,16 +133,26 @@ const AutoExtractImages = ({ messageContent, imageBlocks }: AutoExtractImagesPro
             ? `${validUrl}&t=${Date.now()}` 
             : `${validUrl}?t=${Date.now()}`;
             
-          return {
-            ...img,
-            url: urlWithTimestamp
-          };
+          // 중복 확인 후 추가
+          if (!images.some(existing => existing.url.split('?')[0] === urlWithTimestamp.split('?')[0])) {
+            images.push({
+              ...img,
+              url: urlWithTimestamp
+            });
+          }
         });
       }
       
       setExtractedImages(images);
       setIsExtracted(true);
       console.log(`자동 추출된 이미지: ${images.length}개`);
+      
+      if (images.length > 0) {
+        console.log('추출된 이미지 목록:');
+        images.forEach((img, idx) => {
+          console.log(`이미지 #${idx+1}: ${img.url.substring(0, 100)}...`);
+        });
+      }
     } catch (error) {
       console.error('이미지 자동 추출 중 오류:', error);
       setIsExtracted(true);

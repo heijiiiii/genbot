@@ -325,105 +325,89 @@ export async function sendChatMessage(message: string, history: any[] = []) {
       console.log('Supabase URL 존재:', hasSupabaseUrl);
     }
     
-    // 이미지 처리: API가 이미지를 반환하지 않았거나 빈 배열인 경우 텍스트에서 추출 시도
-    if (!data.images || data.images.length === 0) {
-      console.log('API에서 반환된 이미지가 없습니다. 텍스트에서 추출 시도합니다.');
-      console.log('받은 원본 텍스트:', data.answer);
+    // 이미지 패턴을 먼저 추출하여 수집
+    const extractedImages = extractImagesFromText(data.answer);
+
+    // 응답 텍스트 정리 (이미지 관련 텍스트 제거)
+    if (data.answer) {
+      // 원본 텍스트 저장
+      const originalAnswer = data.answer;
       
-      const extractedImages = extractImagesFromText(data.answer);
-      if (extractedImages.length > 0) {
-        console.log('텍스트에서 이미지 추출 성공:', extractedImages.length);
-        console.log('추출된 이미지 URL:', extractedImages.map(img => img.url).join('\n'));
-        data.images = extractedImages;
+      // 정규식 패턴들을 정의하여 이미지 관련 텍스트를 제거
+      const cleanPatterns = [
+        // 1. [이미지 n] 패턴 제거 (한 줄 전체)
+        /\[이미지\s*\d+\].*(?:\n|\r\n)?/gi,
         
-        // 추출된 이미지 URL을 정규 표현식으로 응답에서 제거
-        // 원본 텍스트 저장
-        const originalAnswer = data.answer;
+        // 2. 이미지 URL 라인 제거
+        /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n\?]+(?:\?[^\s\n]*)?(?:\n|\r\n)?/gi,
         
-        // 모든 [이미지 n] 패턴과 그 뒤에 오는 URL 제거
-        // 1. 첫 번째 단계: [이미지 n] 패턴 제거
-        let cleanedAnswer = originalAnswer.replace(/\[이미지\s*\d+\](?:.*?)(?:\n|\r\n)?/gi, '');
+        // 3. 마크다운 이미지 구문 제거 - ![텍스트](URL) 형식
+        /!\[.*?\]\(https?:\/\/[^\s\)]+\)(?:\n|\r\n)?/gi,
         
-        // 2. 두 번째 단계: URL 제거
-        extractedImages.forEach(img => {
-          // URL에서 특수문자 이스케이프하여 정규식 패턴 생성
-          const escapedUrl = img.url.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-          
-          // URL 라인 제거
-          cleanedAnswer = cleanedAnswer.replace(new RegExp(`${escapedUrl}[\\s\\?]*(?:\\n|\\r\\n)?`, 'gi'), '');
-          
-          // 추가 정보 라인 제거 (페이지: n, 관련성 점수: n.n)
-          cleanedAnswer = cleanedAnswer.replace(/페이지: \d+(?:\n|\r\n)?/gi, '');
-          cleanedAnswer = cleanedAnswer.replace(/관련성 점수:.*?(?:\n|\r\n)?/gi, '');
-        });
-        
-        // 3. 빈 줄 여러 개를 하나로 정리
-        cleanedAnswer = cleanedAnswer.replace(/(\n\s*){3,}/g, '\n\n');
-        
-        // 4. "관련 이미지" 섹션 제거
-        cleanedAnswer = cleanedAnswer.replace(/관련 이미지\s*\(\d+개\)(?:\n|\r\n)?/gi, '');
-        
-        // 변경사항 확인 로깅
-        if (cleanedAnswer !== originalAnswer) {
-          console.log('이미지 참조 제거 전 길이:', originalAnswer.length);
-          console.log('이미지 참조 제거 후 길이:', cleanedAnswer.length);
-          console.log('제거된 문자 수:', originalAnswer.length - cleanedAnswer.length);
-        }
-        
-        // 클린 텍스트로 응답 업데이트
-        data.answer = cleanedAnswer;
-      } else {
-        console.log('텍스트에서 이미지를 추출할 수 없음');
-      }
-    } else {
-      console.log('API에서 직접 이미지 반환됨:', data.images.length);
-      console.log('이미지 목록 구조:', JSON.stringify(data.images));
-      
-      // API가 이미지를 직접 제공한 경우에도 텍스트에서 이미지 참조 제거
-      if (data.answer.includes('[이미지') || data.answer.includes('supabase.co')) {
-        console.log('API 응답에 이미지 패턴 또는 URL이 포함되어 있음. 텍스트 정리 시도');
-        
-        // 원본 텍스트 저장
-        const originalAnswer = data.answer;
-        
-        // 모든 [이미지 n] 패턴과 URL 제거
-        // 1. [이미지 n] 패턴 제거
-        let cleanedAnswer = originalAnswer.replace(/\[이미지\s*\d+\](?:.*?)(?:\n|\r\n)?/gi, '');
-        
-        // 2. URL 제거
-        data.images.forEach(img => {
-          if (!img.url) return;
-          
-          // URL에서 특수문자 이스케이프하여 정규식 패턴 생성
-          const escapedUrl = img.url.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-          
-          // URL 라인 제거
-          cleanedAnswer = cleanedAnswer.replace(new RegExp(`${escapedUrl}[\\s\\?]*(?:\\n|\\r\\n)?`, 'gi'), '');
-          
-          // 추가 정보 라인 제거
-          cleanedAnswer = cleanedAnswer.replace(/페이지: \d+(?:\n|\r\n)?/gi, '');
-          cleanedAnswer = cleanedAnswer.replace(/관련성 점수:.*?(?:\n|\r\n)?/gi, '');
-        });
-        
-        // 3. Supabase URL 패턴 제거
-        cleanedAnswer = cleanedAnswer.replace(/https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n\?]+(?:\?[^\s\n]*)?(?:\n|\r\n)?/gi, '');
-        
-        // 4. 빈 줄 여러 개를 하나로 정리
-        cleanedAnswer = cleanedAnswer.replace(/(\n\s*){3,}/g, '\n\n');
+        // 4. 페이지 및 관련성 정보 라인 제거
+        /페이지:.*(?:\n|\r\n)?/gi,
+        /관련성.*(?:\n|\r\n)?/gi,
         
         // 5. "관련 이미지" 섹션 제거
-        cleanedAnswer = cleanedAnswer.replace(/관련 이미지\s*\(\d+개\)(?:\n|\r\n)?/gi, '');
+        /관련 이미지.*(?:\n|\r\n)?/gi,
         
-        // 변경사항 확인 로깅
-        if (cleanedAnswer !== originalAnswer) {
-          console.log('이미지 참조 제거 전 길이:', originalAnswer.length);
-          console.log('이미지 참조 제거 후 길이:', cleanedAnswer.length);
-          console.log('제거된 문자 수:', originalAnswer.length - cleanedAnswer.length);
+        // 6. 빈 줄 여러 개를 하나로 정리
+        /(\n\s*){3,}/g
+      ];
+      
+      // 모든 패턴을 순회하며 텍스트 정리
+      let cleanedAnswer = originalAnswer;
+      cleanPatterns.forEach(pattern => {
+        cleanedAnswer = cleanedAnswer.replace(pattern, (match, index) => {
+          // 인덱스가 0이 아니면 줄바꿈으로 대체 (첫 줄이 아닌 경우)
+          return index > 0 ? '\n' : '';
+        });
+      });
+      
+      // 특수 케이스: 첫 번째 줄이 "[이미지"로 시작하는 경우
+      if (cleanedAnswer.trimStart().startsWith('[이미지')) {
+        // 첫 번째 의미 있는 텍스트 라인 찾기
+        const lines = cleanedAnswer.split(/\n|\r\n/);
+        const meaningfulLines = lines.filter(line => 
+          line.trim() && 
+          !line.trim().startsWith('[이미지') && 
+          !line.includes('https://') &&
+          !line.trim().startsWith('페이지:') &&
+          !line.trim().startsWith('관련성') &&
+          !line.trim().startsWith('관련 이미지')
+        );
+        
+        if (meaningfulLines.length > 0) {
+          cleanedAnswer = meaningfulLines.join('\n');
         }
-        
-        // 클린 텍스트로 응답 업데이트
-        data.answer = cleanedAnswer;
       }
+      
+      // 변경사항 확인 로깅
+      if (cleanedAnswer !== originalAnswer) {
+        console.log('이미지 참조 제거 전 길이:', originalAnswer.length);
+        console.log('이미지 참조 제거 후 길이:', cleanedAnswer.length);
+        console.log('제거된 문자 수:', originalAnswer.length - cleanedAnswer.length);
+      }
+      
+      // 정리된 텍스트로 응답 업데이트
+      data.answer = cleanedAnswer.trim();
+    }
+    
+    // 이미지 설정
+    // 텍스트에서 추출한 이미지가 있으면 사용하고, 없으면 API가 제공한 이미지 사용
+    if (extractedImages.length > 0) {
+      // 텍스트에서 추출한 이미지를 우선 사용
+      console.log('텍스트에서 이미지 추출 성공:', extractedImages.length);
+      console.log('추출된 이미지 URL:', extractedImages.map(img => img.url).join('\n'));
+      data.images = extractedImages;
+    } else if (!data.images || data.images.length === 0) {
+      // API에서 이미지를 제공하지 않고 텍스트에서도 추출할 수 없으면 빈 배열 설정
+      console.log('이미지를 찾을 수 없습니다.');
+      data.images = [];
+    } else {
+      // API에서 이미지를 제공한 경우 그대로 사용
+      console.log('API에서 직접 이미지 반환됨:', data.images.length);
+      console.log('이미지 목록 구조:', JSON.stringify(data.images));
     }
     
     // 이미지 URL을 프록시 URL로 변환
