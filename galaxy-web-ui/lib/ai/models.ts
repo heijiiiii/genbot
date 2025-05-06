@@ -10,16 +10,16 @@ export const chatModels: Array<ChatModel> = [
   {
     id: 'gpt-4o',
     name: 'GPT-4o',
-    description: '기본적인 GPT-4o 모델',
+    description: '기본 모델',
   },
   {
-    id: 'gpt-4.1',
+    id: 'gpt-4.1-2025-04-14',
     name: 'GPT-4.1',
-    description: '최신버전 GPT-4.1 모델',
+    description: '최신 모델',
   },
   {
     id: 'gpt-4o-mini',
     name: 'GPT-4o mini',
-    description: '효율적인 GPT-4o mini 모델',
+    description: '미니 모델',
   },
 ];
