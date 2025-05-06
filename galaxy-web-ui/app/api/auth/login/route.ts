@@ -19,6 +19,8 @@ const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
         headers: {
           ...options?.headers,
           'Family-Preference': 'IPv4', // 이 헤더는 프록시나 서버 설정에 따라 작동할 수 있음
+          'apikey': SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
         }
       });
     }
