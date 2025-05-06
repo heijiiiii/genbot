@@ -280,7 +280,7 @@ export function DataStreamHandler({ id }: { id: string }) {
         }
       });
     });
-  }, [dataStream, setArtifact, setMetadata, artifact, setMessages, messages]);
+  }, [dataStream, setArtifact, setMetadata, artifact, setMessages, processImagesMetadata, processLastMessage]);
 
   // 메시지 변경 감지 및 이미지 처리
   useEffect(() => {
@@ -290,7 +290,7 @@ export function DataStreamHandler({ id }: { id: string }) {
         processLastMessage();
       }, 500); // 500ms 지연으로 스트리밍이 완전히 끝나길 기다림
     }
-  }, [messages]);
+  }, [messages, processLastMessage]);
 
   return null;
 }

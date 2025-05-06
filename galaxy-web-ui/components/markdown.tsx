@@ -3,6 +3,7 @@ import React, { memo, useMemo, useEffect, useState } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './code-block';
+import Image from 'next/image';
 
 // 디버그 모드 설정 (활성화)
 const DEBUG_IMAGE_PROCESSING = true;
@@ -337,6 +338,7 @@ const components: Partial<Components> = {
       return (
         <div className="my-4 flex flex-col items-center border border-gray-200 rounded-lg p-2 bg-gray-50 dark:bg-gray-900 dark:border-gray-800">
           <a href={src} target="_blank" rel="noreferrer" className="max-w-full">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img 
               src={src} 
               alt={alt || "이미지"} 

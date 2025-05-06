@@ -8,11 +8,10 @@ import { createClient } from '@supabase/supabase-js';
 import { CohereEmbeddings } from "@langchain/cohere";
 import { Document } from "@langchain/core/documents";
 import { SupabaseVectorStore } from "@langchain/community/vectorstores/supabase";
-import OpenAI from 'openai';
+import { OpenAI } from 'openai';
 import { myProvider } from '@/lib/ai/providers';
-import { isProductionEnvironment } from '@/lib/constants';
+import { isProductionEnvironment, API_BASE_URL } from '@/lib/constants';
 import { getProxyImageUrl, extractImagesFromText, type ImageData } from '@/lib/ai';
-import { API_BASE_URL } from '@/lib/constants';
 
 // 렌더 백엔드 서버 URL
 const RENDER_BACKEND_URL = 'https://galaxy-rag-chatbot.onrender.com';
