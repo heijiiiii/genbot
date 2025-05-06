@@ -48,27 +48,20 @@ export async function GET(request: NextRequest) {
     return Response.json('Unauthorized!', { status: 401 });
   }
 
-  // 사용자 ID 검증 및 변환
-  let userId = session.user.id;
-  
-  // 게스트 ID가 UUID 형식이 아니면 기본 UUID 사용
-  if (!isValidUUID(userId)) {
-    console.log(`사용자 ID ${userId}는 UUID 형식이 아닙니다. 기본 UUID를 사용합니다.`);
-    // 게스트 사용자에게 고정 UUID 할당 (테스트용)
-    userId = "00000000-0000-0000-0000-000000000001";
-  }
-
   try {
-    console.log(`Supabase 쿼리 시작: 사용자 ID ${userId}의 채팅 조회`);
+    // 현재 사용자 ID 로깅
+    const currentUserId = session.user.id;
+    console.log(`현재 사용자 ID: ${currentUserId}`);
     
-    // Supabase로 채팅 목록 조회
+    // 모든 사용자의 채팅을 조회하는 쿼리 작성
+    console.log(`Supabase 쿼리 시작: 모든 사용자의 채팅 조회 (게스트 포함)`);
+    
     let query = client
       .from('chats')
       .select('id, title, created_at, user_id')
-      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit + 1);
-
+    
     // 페이지네이션 처리
     if (startingAfter) {
       console.log(`startingAfter=${startingAfter} 이후 채팅 조회 중`);
@@ -112,7 +105,8 @@ export async function GET(request: NextRequest) {
       console.log('첫 번째 채팅:', {
         id: chats[0].id,
         title: chats[0].title,
-        created_at: chats[0].created_at
+        created_at: chats[0].created_at,
+        user_id: chats[0].user_id
       });
     } else {
       console.log('채팅 기록이 없습니다.');
