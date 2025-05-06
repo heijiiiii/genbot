@@ -34,6 +34,14 @@ function getProxiedImageUrl(url: string): string {
       }
     }
     
+    // URL 끝의 물음표 제거
+    if (url.endsWith('?')) {
+      url = url.slice(0, -1);
+      if (DEBUG_IMAGE_LOADING) {
+        console.log('URL 끝 물음표 제거 후:', url);
+      }
+    }
+    
     // URL 인코딩 - 쿼리 파라미터를 보존하기 위해 URL 자체를 인코딩
     const encodedUrl = encodeURIComponent(url);
     // 캐시 버스팅을 위한 타임스탬프 추가
@@ -280,4 +288,4 @@ export function ChatImageGallery({ images }: { images: ImageData[] }) {
       </div>
     </div>
   );
-} 
+}

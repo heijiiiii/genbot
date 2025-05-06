@@ -48,15 +48,49 @@ export async function POST(request: Request) {
 
       // URL 끝에 괄호가 있으면 제거 (유일한 처리)
       if (data.images && Array.isArray(data.images)) {
+        console.log('백엔드 이미지 URL 처리 전:', data.images.map((img: ImageData) => img.url));
+        
         data.images = data.images.map((img: ImageData) => {
-          if (img.url && img.url.endsWith(')')) {
-            return {
-              ...img,
-              url: img.url.slice(0, -1)
-            };
+          if (!img.url) return img;
+          
+          // URL 정리 작업
+          let cleanUrl = img.url;
+          
+          // 1. URL 끝의 괄호 제거
+          if (cleanUrl.endsWith(')')) {
+            cleanUrl = cleanUrl.slice(0, -1);
           }
-          return img;
+          
+          // 2. URL 끝의 물음표 제거
+          if (cleanUrl.endsWith('?')) {
+            cleanUrl = cleanUrl.slice(0, -1);
+          }
+          
+          // 3. 중복된 확장자 수정 (.jpg.jpg -> .jpg)
+          cleanUrl = cleanUrl.replace(/\.jpg\.jpg/i, '.jpg');
+          
+          // 4. 줄바꿈 문자 제거
+          cleanUrl = cleanUrl.replace(/[\r\n]+/g, '');
+          
+          // 5. 이미지 URL이 두 줄로 표시되는 경우 처리
+          if (cleanUrl.includes('galaxy_s25') && !cleanUrl.includes('supabase.co')) {
+            // URL 형식이 아닌 파일명만 있는 경우
+            cleanUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${cleanUrl}`;
+          }
+          
+          // 수정된 URL 로그
+          if (cleanUrl !== img.url) {
+            console.log('URL 정리됨:', img.url, '->', cleanUrl);
+          }
+          
+          return {
+            ...img,
+            url: cleanUrl
+          };
         });
+        
+        console.log('백엔드 이미지 URL 처리 후:', data.images.map((img: ImageData) => img.url));
+        console.log('총 이미지 수:', data.images.length);
       }
 
       return NextResponse.json(data);

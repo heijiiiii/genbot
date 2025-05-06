@@ -51,6 +51,12 @@ export function getProxyImageUrl(originalUrl: string): string {
       console.log('URL 끝 괄호()) 제거 후:', normalizedUrl);
     }
     
+    // URL 끝에 물음표(?)가 있으면 제거
+    if (normalizedUrl.endsWith('?')) {
+      normalizedUrl = normalizedUrl.slice(0, -1);
+      console.log('URL 끝 물음표(?) 제거 후:', normalizedUrl);
+    }
+    
     // 파일 확장자 뒤에 붙은 괄호 제거 (예: .jpg)의 경우)
     normalizedUrl = normalizedUrl.replace(/(\.(jpg|jpeg|png|gif|webp))\)/gi, '$1');
     console.log('확장자 뒤 괄호 제거 후 URL:', normalizedUrl);
@@ -143,7 +149,7 @@ export function extractImagesFromText(text: string): ImageData[] {
   // Supabase URL 직접 추출 (URL이 없는 경우를 위한 백업)
   if (text.includes('ywvoksfszaelkceectaa.supabase.co')) {
     console.log("Supabase URL 직접 추출 시도");
-    const directUrlPattern = /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n?]+/gi;
+    const directUrlPattern = /https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n\?]+/gi;
     
     let urlMatch;
     let matchCount = 0;

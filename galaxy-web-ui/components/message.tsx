@@ -104,13 +104,27 @@ const AutoExtractImages = ({ messageContent, imageBlocks }: AutoExtractImagesPro
         images = contentImages.map(img => {
           let validUrl = img.url;
           
-          // screen 타입 검사 및 대체
+          // 이미지 타입 검사 및 대체
           if (validUrl.includes('galaxy_s25_screen_')) {
             validUrl = validUrl.replace('galaxy_s25_screen_', 'galaxy_s25_figure_');
             console.log('이미지 타입 수정 (screen -> figure):', validUrl);
           } else if (validUrl.includes('galaxy_s25_diagram_')) {
             validUrl = validUrl.replace('galaxy_s25_diagram_', 'galaxy_s25_figure_');
             console.log('이미지 타입 수정 (diagram -> figure):', validUrl);
+          }
+          
+          // 잘못된 이미지 타입 수정 (다른 타입들도 검사)
+          ['dual', 'mode', 'single', 'take'].forEach(invalidType => {
+            if (validUrl.includes(`galaxy_s25_${invalidType}_`)) {
+              validUrl = validUrl.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
+              console.log(`이미지 타입 수정 (${invalidType} -> figure):`, validUrl);
+            }
+          });
+          
+          // URL 끝의 물음표 제거
+          if (validUrl.endsWith('?')) {
+            validUrl = validUrl.slice(0, -1);
+            console.log('URL 끝 물음표 제거:', validUrl);
           }
           
           // 캐시 버스팅을 위한 타임스탬프 추가
