@@ -368,9 +368,24 @@ async def chat(request: ChatRequest):
             conversation_context = "이전 대화 내용:\n"
             for i, exchange in enumerate(conversation_history[-5:]):  
                 conversation_context += f"[대화 {i+1}]\n"
-                conversation_context += f"사용자: {exchange.get('user', '')}\n"
-                if "ai" in exchange:
+                # 대화 히스토리 구조 확인 및 올바른 필드 접근
+                if "user" in exchange and "ai" in exchange:
+                    # user와 ai 필드 형식인 경우 (streamlit_app.py에서 보내는 형식)
+                    conversation_context += f"사용자: {exchange.get('user', '')}\n"
                     conversation_context += f"도우미: {exchange.get('ai', '')}\n"
+                elif "role" in exchange and "content" in exchange:
+                    # role과 content 필드 형식인 경우
+                    if exchange["role"] == "user":
+                        conversation_context += f"사용자: {exchange.get('content', '')}\n"
+                    elif exchange["role"] == "assistant":
+                        conversation_context += f"도우미: {exchange.get('content', '')}\n"
+                else:
+                    # 기타 경우 (키가 없는 경우) - 기본 처리
+                    user_msg = exchange.get('user', exchange.get('content', ''))
+                    conversation_context += f"사용자: {user_msg}\n"
+                    ai_msg = exchange.get('ai', '')
+                    if ai_msg:
+                        conversation_context += f"도우미: {ai_msg}\n"
         
         # 참조 페이지 추출
         reference_pages = []

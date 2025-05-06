@@ -215,7 +215,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
       <SidebarGroup>
         <SidebarGroupContent>
           <div className="px-2 text-zinc-500 w-full flex flex-row justify-center items-center text-sm gap-2">
-            채팅을 시작하면 대화 기록이 여기에 표시됩니다.
+            채팅을 시작하면 대화 기록이 저장됩니다.
           </div>
         </SidebarGroupContent>
       </SidebarGroup>

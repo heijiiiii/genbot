@@ -63,20 +63,28 @@ export async function GET(request: NextRequest) {
     const currentUserId = session.user.id;
     console.log(`현재 사용자 ID: ${currentUserId}`);
     
-    // 현재 세션의 채팅만 조회하기 위한 시간 계산 (지난 24시간 이내)
-    const lastDay = new Date();
-    lastDay.setHours(lastDay.getHours() - 24);
-    const timeFilter = lastDay.toISOString();
+    // 먼저 사용자가 존재하는지 확인
+    const { data: userCheck, error: userError } = await client
+      .from('users')
+      .select('id')
+      .eq('id', currentUserId)
+      .single();
+      
+    if (userError) {
+      console.log(`사용자 확인 오류: ${userError.message}`);
+      console.log(`users 테이블에서 user_id=${currentUserId} 검색 실패`);
+    } else {
+      console.log(`사용자 확인 성공: ${userCheck ? "사용자 존재" : "사용자 없음"}`);
+    }
     
-    console.log(`시간 필터 적용: ${timeFilter} 이후의 채팅만 조회`);
-    
-    // 현재 세션의 채팅만 조회하는 쿼리 작성
-    console.log(`Supabase 쿼리 시작: 최근 24시간 내의 채팅 조회`);
+    // 테이블 스키마 확인
+    console.log(`chats 테이블 필드 확인: 사용자 ID 필드는 'user_id'로 가정`);
     
     let query = client
       .from('chats')
       .select('id, title, created_at, user_id')
-      .gt('created_at', timeFilter) // 최근 24시간 이내의 채팅만 조회
+      .eq('user_id', currentUserId) // 현재 사용자의 채팅만 필터링
+      // .gt('created_at', timeFilter) // 시간 필터 제거
       .order('created_at', { ascending: false })
       .limit(limit + 1);
     
@@ -115,6 +123,90 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('채팅 목록 조회 오류:', error);
+      console.log(`오류 세부 정보: ${JSON.stringify(error)}`);
+      
+      // 스키마 오류일 경우 다른 필드명으로 시도해보기
+      if (error.message && (error.message.includes('column') || error.message.includes('field'))) {
+        console.log("필드명 오류 가능성 있음. 다양한 필드명 형식 시도");
+        
+        // 1. userId 필드 시도
+        console.log("시도 1: 'userId' 필드로 검색");
+        const { data: altChats1, error: altError1 } = await client
+          .from('chats')
+          .select('id, title, created_at, userId')
+          .eq('userId', currentUserId)
+          .order('created_at', { ascending: false })
+          .limit(limit + 1);
+          
+        if (!altError1 && altChats1 && altChats1.length > 0) {
+          console.log(`'userId' 필드 조회 성공: ${altChats1.length}개 채팅 발견`);
+          // 원래 포맷으로 변환
+          const transformedChats = altChats1.map(chat => ({
+            id: chat.id,
+            title: chat.title,
+            created_at: chat.created_at,
+            user_id: chat.userId
+          }));
+          
+          const hasMore = transformedChats.length > limit;
+          const result = {
+            chats: hasMore ? transformedChats.slice(0, limit) : transformedChats,
+            hasMore
+          };
+          
+          return Response.json(result);
+        } else {
+          console.log(`'userId' 필드 조회 실패: ${altError1?.message || "알 수 없는 오류"}`);
+        }
+        
+        // 2. userid 필드 시도
+        console.log("시도 2: 'userid' 필드로 검색");
+        const { data: altChats2, error: altError2 } = await client
+          .from('chats')
+          .select('id, title, created_at, userid')
+          .eq('userid', currentUserId)
+          .order('created_at', { ascending: false })
+          .limit(limit + 1);
+          
+        if (!altError2 && altChats2 && altChats2.length > 0) {
+          console.log(`'userid' 필드 조회 성공: ${altChats2.length}개 채팅 발견`);
+          // 원래 포맷으로 변환
+          const transformedChats = altChats2.map(chat => ({
+            id: chat.id,
+            title: chat.title,
+            created_at: chat.created_at,
+            user_id: chat.userid
+          }));
+          
+          const hasMore = transformedChats.length > limit;
+          const result = {
+            chats: hasMore ? transformedChats.slice(0, limit) : transformedChats,
+            hasMore
+          };
+          
+          return Response.json(result);
+        } else {
+          console.log(`'userid' 필드 조회 실패: ${altError2?.message || "알 수 없는 오류"}`);
+        }
+        
+        // 3. 마지막 대안: Supabase에서 직접 테이블 스키마 정보 가져오기
+        console.log("시도 3: Supabase에서 테이블 정보 조회");
+        try {
+          // 테이블 정보 조회를 통해 필드명 확인
+          const { data: tableInfo, error: tableError } = await client.rpc('get_table_definition', {
+            table_name: 'chats'
+          });
+          
+          if (!tableError && tableInfo) {
+            console.log(`chats 테이블 정보: ${JSON.stringify(tableInfo)}`);
+          } else {
+            console.log(`테이블 정보 조회 실패: ${tableError?.message || "알 수 없는 오류"}`);
+          }
+        } catch (infoError) {
+          console.log(`테이블 정보 조회 중 예외 발생: ${infoError}`);
+        }
+      }
+      
       return Response.json('Failed to fetch chats!', { status: 500 });
     }
 

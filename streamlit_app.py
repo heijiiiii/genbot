@@ -223,8 +223,7 @@ if user_input:
                     })
                 elif "user" in item and "ai" in item:
                     # user와 ai 필드를 포함하는 형식인 경우
-                    formatted_history.append({"role": "user", "content": item["user"]})
-                    formatted_history.append({"role": "assistant", "content": item["ai"]})
+                    formatted_history.append({"user": item["user"], "ai": item["ai"]})
             
             # 타임아웃을 더 늘려봅니다
             response = requests.post(
@@ -253,14 +252,15 @@ if user_input:
                 st.session_state.messages.append(bot_message)
                 
                 # 챗 기록 업데이트 - 현재 메시지 쌍 추가
-                # 사용자 메시지 추가
-                st.session_state.chat_history.append({"role": "user", "content": user_input})
-                # 봇 응답 추가
-                st.session_state.chat_history.append({"role": "assistant", "content": data["answer"]})
+                # 대화 쌍 형식으로 저장 (user와 ai 필드 사용)
+                st.session_state.chat_history.append({
+                    "user": user_input,
+                    "ai": data["answer"]
+                })
                 
-                # 이력 제한 (최대 20개 메시지로 제한)
-                if len(st.session_state.chat_history) > 20:
-                    st.session_state.chat_history = st.session_state.chat_history[-20:]
+                # 이력 제한 (최대 20개 대화 쌍으로 제한)
+                if len(st.session_state.chat_history) > 10:
+                    st.session_state.chat_history = st.session_state.chat_history[-10:]
                 
                 # 입력 키 증가시켜 새 입력 필드 생성
                 st.session_state.input_key += 1
