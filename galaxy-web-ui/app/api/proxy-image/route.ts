@@ -54,6 +54,23 @@ export async function GET(request: NextRequest) {
       normalizedImageUrl = normalizedImageUrl.slice(0, -1);
       console.log('URL 끝 ? 기호 제거 후:', normalizedImageUrl);
     }
+    
+    // URL 끝에 ) 기호가 있으면 제거
+    if (normalizedImageUrl.endsWith(')')) {
+      normalizedImageUrl = normalizedImageUrl.slice(0, -1);
+      console.log('URL 끝 ) 기호 제거 후:', normalizedImageUrl);
+    }
+    
+    // 파일 확장자 뒤 괄호 제거 - 더 정확한 패턴 (.jpg) → .jpg
+    normalizedImageUrl = normalizedImageUrl.replace(/(\.(jpg|jpeg|png|gif|webp))\)/gi, '$1');
+    
+    // 잘못된 이미지 타입 수정
+    ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
+      if (normalizedImageUrl.includes(`galaxy_s25_${invalidType}_`)) {
+        normalizedImageUrl = normalizedImageUrl.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
+        console.log(`이미지 타입 수정 (${invalidType} -> figure):`, normalizedImageUrl);
+      }
+    });
 
     // URL 검증
     try {

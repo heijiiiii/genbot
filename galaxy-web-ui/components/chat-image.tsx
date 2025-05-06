@@ -34,6 +34,12 @@ function getProxiedImageUrl(url: string): string {
       }
     }
     
+    // 파일 확장자 뒤 괄호 제거 - 더 정확한 패턴 (.jpg) → .jpg 
+    url = url.replace(/(\.(jpg|jpeg|png|gif|webp))\)/gi, '$1');
+    if (DEBUG_IMAGE_LOADING) {
+      console.log('파일 확장자 뒤 괄호 제거 후:', url);
+    }
+    
     // URL 끝의 물음표 제거
     if (url.endsWith('?')) {
       url = url.slice(0, -1);
@@ -41,6 +47,25 @@ function getProxiedImageUrl(url: string): string {
         console.log('URL 끝 물음표 제거 후:', url);
       }
     }
+    
+    // 중복 URL 패턴 처리 (같은 URL이 반복되는 경우)
+    if (url.includes('https://') && url.lastIndexOf('https://') > 0) {
+      // 첫 번째 URL만 사용
+      url = url.substring(0, url.lastIndexOf('https://'));
+      if (DEBUG_IMAGE_LOADING) {
+        console.log('중복 URL 제거 후:', url);
+      }
+    }
+    
+    // 잘못된 이미지 타입 수정
+    ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
+      if (url.includes(`galaxy_s25_${invalidType}_`)) {
+        url = url.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
+        if (DEBUG_IMAGE_LOADING) {
+          console.log(`이미지 타입 수정 (${invalidType} -> figure):`, url);
+        }
+      }
+    });
     
     // URL 인코딩 - 쿼리 파라미터를 보존하기 위해 URL 자체를 인코딩
     const encodedUrl = encodeURIComponent(url);
@@ -280,7 +305,6 @@ export function ChatImageGallery({ images }: { images: ImageData[] }) {
   
   return (
     <div className="flex flex-col gap-4 mt-4 w-full">
-      <h3 className="text-sm font-medium">관련 이미지 ({images.length}개)</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {images.map((image, index) => (
           <ChatImage key={`${image.url}-${index}`} image={image} />

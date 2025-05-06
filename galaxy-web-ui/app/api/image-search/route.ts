@@ -61,22 +61,33 @@ export async function POST(request: Request) {
             cleanUrl = cleanUrl.slice(0, -1);
           }
           
-          // 2. URL 끝의 물음표 제거
+          // 2. 파일 확장자 뒤 괄호 제거 - 더 정확한 패턴 (.jpg) → .jpg
+          cleanUrl = cleanUrl.replace(/(\.(jpg|jpeg|png|gif|webp))\)/gi, '$1');
+          
+          // 3. URL 끝의 물음표 제거
           if (cleanUrl.endsWith('?')) {
             cleanUrl = cleanUrl.slice(0, -1);
           }
           
-          // 3. 중복된 확장자 수정 (.jpg.jpg -> .jpg)
+          // 4. 중복된 확장자 수정 (.jpg.jpg -> .jpg)
           cleanUrl = cleanUrl.replace(/\.jpg\.jpg/i, '.jpg');
           
-          // 4. 줄바꿈 문자 제거
+          // 5. 줄바꿈 문자 제거
           cleanUrl = cleanUrl.replace(/[\r\n]+/g, '');
           
-          // 5. 이미지 URL이 두 줄로 표시되는 경우 처리
+          // 6. 이미지 URL이 두 줄로 표시되는 경우 처리
           if (cleanUrl.includes('galaxy_s25') && !cleanUrl.includes('supabase.co')) {
             // URL 형식이 아닌 파일명만 있는 경우
             cleanUrl = `https://ywvoksfszaelkceectaa.supabase.co/storage/v1/object/public/images/${cleanUrl}`;
           }
+          
+          // 7. 잘못된 이미지 타입 수정
+          ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
+            if (cleanUrl.includes(`galaxy_s25_${invalidType}_`)) {
+              cleanUrl = cleanUrl.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
+              console.log(`이미지 타입 수정 (${invalidType} -> figure):`, cleanUrl);
+            }
+          });
           
           // 수정된 URL 로그
           if (cleanUrl !== img.url) {

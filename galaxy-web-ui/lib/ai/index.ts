@@ -51,15 +51,22 @@ export function getProxyImageUrl(originalUrl: string): string {
       console.log('URL 끝 괄호()) 제거 후:', normalizedUrl);
     }
     
+    // 파일 확장자 뒤 괄호 제거 - 더 정확한 패턴 (.jpg) → .jpg
+    normalizedUrl = normalizedUrl.replace(/(\.(jpg|jpeg|png|gif|webp))\)/gi, '$1');
+    console.log('확장자 뒤 괄호 제거 후 URL:', normalizedUrl);
+    
     // URL 끝에 물음표(?)가 있으면 제거
     if (normalizedUrl.endsWith('?')) {
       normalizedUrl = normalizedUrl.slice(0, -1);
       console.log('URL 끝 물음표(?) 제거 후:', normalizedUrl);
     }
     
-    // 파일 확장자 뒤에 붙은 괄호 제거 (예: .jpg)의 경우)
-    normalizedUrl = normalizedUrl.replace(/(\.(jpg|jpeg|png|gif|webp))\)/gi, '$1');
-    console.log('확장자 뒤 괄호 제거 후 URL:', normalizedUrl);
+    // 중복 URL 패턴 처리 (같은 URL이 반복되는 경우)
+    if (normalizedUrl.includes('https://') && normalizedUrl.lastIndexOf('https://') > 0) {
+      // 첫 번째 URL만 사용
+      normalizedUrl = normalizedUrl.substring(0, normalizedUrl.lastIndexOf('https://'));
+      console.log('중복 URL 제거 후:', normalizedUrl);
+    }
     
     // 프로토콜이 없는 경우 https를 기본으로 추가
     if (!normalizedUrl.match(/^https?:\/\//i)) {
@@ -80,6 +87,14 @@ export function getProxyImageUrl(originalUrl: string): string {
       
       console.log('Supabase URL 경로 표준화:', normalizedUrl);
     }
+    
+    // 잘못된 이미지 타입 수정
+    ['screen', 'diagram', 'dual', 'mode', 'single', 'take'].forEach(invalidType => {
+      if (normalizedUrl.includes(`galaxy_s25_${invalidType}_`)) {
+        normalizedUrl = normalizedUrl.replace(`galaxy_s25_${invalidType}_`, 'galaxy_s25_figure_');
+        console.log(`이미지 타입 수정 (${invalidType} -> figure):`, normalizedUrl);
+      }
+    });
     
     // URL 유효성 검사 시도
     try {
@@ -119,12 +134,24 @@ export function extractImagesFromText(text: string): ImageData[] {
   
   // 백엔드 응답이 일관된 형태를 가지므로 단순화된 패턴 사용
   // [이미지 숫자] 다음 줄에 URL이 오는 패턴
-  const imagePattern = /\[이미지\s*(\d+)\]\s*(?:\n|\r\n)(https?:\/\/[^\s\n]+)/gi;
+  // 정규식 패턴 개선: URL이 여러 줄에 걸쳐 있거나 공백이 있는 경우도 처리
+  const imagePattern = /\[이미지\s*(\d+)\](?:.*?)(?:\n|\r\n)?(https?:\/\/[^\s\n\?]+(?:\?[^\s\n]*)?)/gi;
   
   let match;
   while ((match = imagePattern.exec(text)) !== null) {
     const imageNum = match[1];
-    const imageUrl = match[2].trim();
+    let imageUrl = match[2].trim();
+    
+    // URL 끝에 물음표(?)가 있으면 제거
+    if (imageUrl.endsWith('?')) {
+      imageUrl = imageUrl.slice(0, -1);
+    }
+    
+    // URL에 중복된 부분이 있는지 확인 (같은 URL이 반복되는 경우)
+    if (imageUrl.includes('https://') && imageUrl.lastIndexOf('https://') > 0) {
+      // 첫 번째 URL만 사용
+      imageUrl = imageUrl.substring(0, imageUrl.lastIndexOf('https://'));
+    }
     
     console.log(`이미지 매칭: [${imageNum}] ${imageUrl.substring(0, 100)}...`);
     
@@ -144,6 +171,49 @@ export function extractImagesFromText(text: string): ImageData[] {
     images.forEach((img, idx) => {
       console.log(`이미지 #${idx+1}, 페이지: ${img.page}, URL: ${img.url.substring(0, 50)}...`);
     });
+  }
+  
+  // 백업 패턴: [이미지 숫자] 패턴 후 여러 줄에 걸쳐 URL이 있는 경우
+  if (images.length < (text.match(/\[이미지\s*\d+\]/gi)?.length || 0)) {
+    console.log("추가 이미지 패턴 검색 시도");
+    
+    // 텍스트를 [이미지 숫자] 패턴으로 분할
+    const imageSections = text.split(/\[이미지\s*\d+\]/gi);
+    
+    // 첫 번째 섹션은 이미지 전 텍스트이므로 건너뜀
+    for (let i = 1; i < imageSections.length; i++) {
+      const section = imageSections[i];
+      // 이미 추출된 이미지가 있는지 확인
+      if (images.some(img => img.page === String(i))) continue;
+      
+      // URL 패턴 추출 시도
+      const urlMatch = section.match(/(https?:\/\/[^\s\n\?]+(?:\?[^\s\n]*)?)/i);
+      if (urlMatch) {
+        let imageUrl = urlMatch[1].trim();
+        
+        // URL 끝에 물음표(?)가 있으면 제거
+        if (imageUrl.endsWith('?')) {
+          imageUrl = imageUrl.slice(0, -1);
+        }
+        
+        // URL에 중복된 부분이 있는지 확인
+        if (imageUrl.includes('https://') && imageUrl.lastIndexOf('https://') > 0) {
+          imageUrl = imageUrl.substring(0, imageUrl.lastIndexOf('https://'));
+        }
+        
+        console.log(`추가 이미지 발견 [${i}]: ${imageUrl.substring(0, 100)}...`);
+        
+        if (!images.some(img => img.url === imageUrl)) {
+          images.push({
+            url: imageUrl,
+            page: String(i),
+            relevance_score: 0.8
+          });
+        }
+      }
+    }
+    
+    console.log('추가 패턴 후 이미지 수:', images.length);
   }
   
   // Supabase URL 직접 추출 (URL이 없는 경우를 위한 백업)
@@ -171,7 +241,7 @@ export function extractImagesFromText(text: string): ImageData[] {
     
   // 파일명 패턴 기반 URL 생성 - URL 유무와 상관없이 항상 실행
   // 갤럭시 이미지 파일명 패턴을 찾기 - 더 유연한 패턴으로 수정
-  const fileNamePattern = /galaxy_s25_(?:figure|chart)_p(\d+)_(?:top|mid|bot)_[a-f0-9]+\.jpg/gi;
+  const fileNamePattern = /galaxy_s25_(?:figure|chart|screen|diagram|dual|mode|single|take)_p(\d+)_(?:top|mid|bot)_[a-f0-9]+\.jpg/gi;
   let fileNameMatch;
   
   while ((fileNameMatch = fileNamePattern.exec(text)) !== null) {
@@ -267,33 +337,93 @@ export async function sendChatMessage(message: string, history: any[] = []) {
         data.images = extractedImages;
         
         // 추출된 이미지 URL을 정규 표현식으로 응답에서 제거
+        // 원본 텍스트 저장
+        const originalAnswer = data.answer;
+        
+        // 모든 [이미지 n] 패턴과 그 뒤에 오는 URL 제거
+        // 1. 첫 번째 단계: [이미지 n] 패턴 제거
+        let cleanedAnswer = originalAnswer.replace(/\[이미지\s*\d+\](?:.*?)(?:\n|\r\n)?/gi, '');
+        
+        // 2. 두 번째 단계: URL 제거
         extractedImages.forEach(img => {
-          // 이미지 URL 패턴 전체를 제거하는 정규식 강화
+          // URL에서 특수문자 이스케이프하여 정규식 패턴 생성
           const escapedUrl = img.url.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
           
-          // 여러 패턴 시도 (더 포괄적인 패턴 매칭)
-          const patterns = [
-            // 기본 패턴 (이미지 번호 + URL)
-            new RegExp(`\\[이미지\\s*\\d+\\](?:.*?\\n)?${escapedUrl}\\s*`, 'gi'),
-            
-            // URL만 있는 경우
-            new RegExp(`${escapedUrl}\\s*`, 'gi'),
-            
-            // 이미지 패턴이 여러 줄에 걸쳐 있는 경우
-            new RegExp(`\\[이미지\\s*\\d+\\][^\\n]*\\n(?:[^\\n]*\\n)*?${escapedUrl}\\s*(?:\\n[^\\n]*)*`, 'gi')
-          ];
+          // URL 라인 제거
+          cleanedAnswer = cleanedAnswer.replace(new RegExp(`${escapedUrl}[\\s\\?]*(?:\\n|\\r\\n)?`, 'gi'), '');
           
-          // 각 패턴으로 시도하여 제거
-          patterns.forEach(pattern => {
-            data.answer = data.answer.replace(pattern, '');
+          // 추가 정보 라인 제거 (페이지: n, 관련성 점수: n.n)
+          cleanedAnswer = cleanedAnswer.replace(/페이지: \d+(?:\n|\r\n)?/gi, '');
+          cleanedAnswer = cleanedAnswer.replace(/관련성 점수:.*?(?:\n|\r\n)?/gi, '');
         });
-        });
+        
+        // 3. 빈 줄 여러 개를 하나로 정리
+        cleanedAnswer = cleanedAnswer.replace(/(\n\s*){3,}/g, '\n\n');
+        
+        // 4. "관련 이미지" 섹션 제거
+        cleanedAnswer = cleanedAnswer.replace(/관련 이미지\s*\(\d+개\)(?:\n|\r\n)?/gi, '');
+        
+        // 변경사항 확인 로깅
+        if (cleanedAnswer !== originalAnswer) {
+          console.log('이미지 참조 제거 전 길이:', originalAnswer.length);
+          console.log('이미지 참조 제거 후 길이:', cleanedAnswer.length);
+          console.log('제거된 문자 수:', originalAnswer.length - cleanedAnswer.length);
+        }
+        
+        // 클린 텍스트로 응답 업데이트
+        data.answer = cleanedAnswer;
       } else {
         console.log('텍스트에서 이미지를 추출할 수 없음');
       }
     } else {
       console.log('API에서 직접 이미지 반환됨:', data.images.length);
       console.log('이미지 목록 구조:', JSON.stringify(data.images));
+      
+      // API가 이미지를 직접 제공한 경우에도 텍스트에서 이미지 참조 제거
+      if (data.answer.includes('[이미지') || data.answer.includes('supabase.co')) {
+        console.log('API 응답에 이미지 패턴 또는 URL이 포함되어 있음. 텍스트 정리 시도');
+        
+        // 원본 텍스트 저장
+        const originalAnswer = data.answer;
+        
+        // 모든 [이미지 n] 패턴과 URL 제거
+        // 1. [이미지 n] 패턴 제거
+        let cleanedAnswer = originalAnswer.replace(/\[이미지\s*\d+\](?:.*?)(?:\n|\r\n)?/gi, '');
+        
+        // 2. URL 제거
+        data.images.forEach(img => {
+          if (!img.url) return;
+          
+          // URL에서 특수문자 이스케이프하여 정규식 패턴 생성
+          const escapedUrl = img.url.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+          
+          // URL 라인 제거
+          cleanedAnswer = cleanedAnswer.replace(new RegExp(`${escapedUrl}[\\s\\?]*(?:\\n|\\r\\n)?`, 'gi'), '');
+          
+          // 추가 정보 라인 제거
+          cleanedAnswer = cleanedAnswer.replace(/페이지: \d+(?:\n|\r\n)?/gi, '');
+          cleanedAnswer = cleanedAnswer.replace(/관련성 점수:.*?(?:\n|\r\n)?/gi, '');
+        });
+        
+        // 3. Supabase URL 패턴 제거
+        cleanedAnswer = cleanedAnswer.replace(/https?:\/\/ywvoksfszaelkceectaa\.supabase\.co\/storage\/v1\/object\/public\/images\/[^\s\n\?]+(?:\?[^\s\n]*)?(?:\n|\r\n)?/gi, '');
+        
+        // 4. 빈 줄 여러 개를 하나로 정리
+        cleanedAnswer = cleanedAnswer.replace(/(\n\s*){3,}/g, '\n\n');
+        
+        // 5. "관련 이미지" 섹션 제거
+        cleanedAnswer = cleanedAnswer.replace(/관련 이미지\s*\(\d+개\)(?:\n|\r\n)?/gi, '');
+        
+        // 변경사항 확인 로깅
+        if (cleanedAnswer !== originalAnswer) {
+          console.log('이미지 참조 제거 전 길이:', originalAnswer.length);
+          console.log('이미지 참조 제거 후 길이:', cleanedAnswer.length);
+          console.log('제거된 문자 수:', originalAnswer.length - cleanedAnswer.length);
+        }
+        
+        // 클린 텍스트로 응답 업데이트
+        data.answer = cleanedAnswer;
+      }
     }
     
     // 이미지 URL을 프록시 URL로 변환
