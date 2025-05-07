@@ -61,9 +61,26 @@ export const Greeting = () => {
               if (inputEl) {
                 inputEl.value = item.title;
                 inputEl.focus();
-                // 입력 변경 이벤트 발생
-                const event = new Event('input', { bubbles: true });
+                
+                // 입력 변경 이벤트 발생 - React 이벤트를 위한 처리 추가
+                const event = new Event('input', { bubbles: true, cancelable: true });
                 inputEl.dispatchEvent(event);
+                
+                // React 컴포넌트의 onChange 핸들러 트리거를 위한 추가 처리
+                const changeEvent = new Event('change', { bubbles: true });
+                inputEl.dispatchEvent(changeEvent);
+                
+                // 아래 접근 방식도 시도 (브라우저 호환성을 위해)
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                  window.HTMLTextAreaElement.prototype, 
+                  "value"
+                )?.set;
+                
+                if (nativeInputValueSetter) {
+                  nativeInputValueSetter.call(inputEl, item.title);
+                  const ev2 = new Event('input', { bubbles: true });
+                  inputEl.dispatchEvent(ev2);
+                }
               }
             }}
           >
