@@ -59,6 +59,7 @@ export const Greeting = () => {
             onClick={() => {
               const inputEl = document.querySelector('[data-testid="multimodal-input"]') as HTMLTextAreaElement;
               if (inputEl) {
+                // 텍스트 입력 설정
                 inputEl.value = item.title;
                 inputEl.focus();
                 
@@ -81,6 +82,35 @@ export const Greeting = () => {
                   const ev2 = new Event('input', { bubbles: true });
                   inputEl.dispatchEvent(ev2);
                 }
+                
+                // 입력 후 짧은 지연 시간을 두고 제출 버튼 클릭 또는 폼 제출
+                setTimeout(() => {
+                  // 방법 1: 제출 버튼 찾아서 클릭
+                  const sendButton = document.querySelector('[data-testid="send-button"]');
+                  if (sendButton && sendButton instanceof HTMLButtonElement) {
+                    sendButton.click();
+                    return;
+                  }
+                  
+                  // 방법 2: 폼 요소 찾아서 제출
+                  const form = inputEl.closest('form');
+                  if (form) {
+                    const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+                    form.dispatchEvent(submitEvent);
+                    return;
+                  }
+                  
+                  // 방법 3: Enter 키 이벤트 발생시키기
+                  const enterEvent = new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    which: 13,
+                    keyCode: 13,
+                    bubbles: true,
+                    cancelable: true
+                  });
+                  inputEl.dispatchEvent(enterEvent);
+                }, 300); // 약간의 지연을 두어 UI 업데이트 후 제출되도록 함
               }
             }}
           >

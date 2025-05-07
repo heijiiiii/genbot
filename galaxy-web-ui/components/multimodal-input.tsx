@@ -362,6 +362,7 @@ function PureSendButton({
     <Button
       type="submit"
       size="icon"
+      data-testid="send-button"
       className={cn(
         'size-8 transition-all duration-300 rounded-full shadow-sm hover:shadow-md',
         isEmpty || isUploading
@@ -369,7 +370,6 @@ function PureSendButton({
           : 'bg-gradient-to-r from-galaxy-blue to-galaxy-navy text-white hover:from-galaxy-blue-light hover:to-galaxy-blue transform hover:scale-105'
       )}
       disabled={isEmpty || isUploading}
-      data-testid="send-button"
     >
       <ArrowUpIcon />
       <span className="sr-only">Send message</span>

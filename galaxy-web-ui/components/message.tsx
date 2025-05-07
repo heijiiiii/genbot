@@ -475,7 +475,7 @@ export const ThinkingMessage = () => {
             <SparklesIcon size={14} />
           </div>
         </div>
-        
+
         <div className="flex flex-col gap-2">
           <div className="flex gap-1 items-center">
             <div className="size-2 bg-galaxy-blue animate-bounce rounded-full" />
