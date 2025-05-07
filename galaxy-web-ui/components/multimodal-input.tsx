@@ -127,6 +127,17 @@ function PureMultimodalInput({
     chatId,
   ]);
 
+  // 전역 접근을 위한 함수 추가
+  useEffect(() => {
+    // @ts-ignore
+    window.submitGalaxyForm = submitForm;
+    
+    return () => {
+      // @ts-ignore
+      delete window.submitGalaxyForm;
+    };
+  }, [submitForm]);
+
   const uploadFile = async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);

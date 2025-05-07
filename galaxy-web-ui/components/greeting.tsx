@@ -67,50 +67,59 @@ export const Greeting = () => {
                 const event = new Event('input', { bubbles: true, cancelable: true });
                 inputEl.dispatchEvent(event);
                 
-                // React 컴포넌트의 onChange 핸들러 트리거를 위한 추가 처리
-                const changeEvent = new Event('change', { bubbles: true });
-                inputEl.dispatchEvent(changeEvent);
-                
-                // 아래 접근 방식도 시도 (브라우저 호환성을 위해)
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                  window.HTMLTextAreaElement.prototype, 
-                  "value"
-                )?.set;
-                
-                if (nativeInputValueSetter) {
-                  nativeInputValueSetter.call(inputEl, item.title);
-                  const ev2 = new Event('input', { bubbles: true });
-                  inputEl.dispatchEvent(ev2);
+                // 직접 setInput 호출을 위한 좀 더 확실한 방법
+                try {
+                  // @ts-ignore - 전역 객체 접근
+                  if (window.__NEXT_DATA__ && window.__NEXT_DATA__.props) {
+                    // 입력 값 강제 업데이트 시도
+                    const changeEvent = new Event('change', { bubbles: true });
+                    inputEl.dispatchEvent(changeEvent);
+                  }
+                } catch (e) {
+                  console.error('React state 업데이트 시도 중 오류:', e);
                 }
                 
-                // 입력 후 짧은 지연 시간을 두고 제출 버튼 클릭 또는 폼 제출
+                // 지연 시간 후 전역 함수 호출
                 setTimeout(() => {
-                  // 방법 1: 제출 버튼 찾아서 클릭
-                  const sendButton = document.querySelector('[data-testid="send-button"]');
-                  if (sendButton && sendButton instanceof HTMLButtonElement) {
-                    sendButton.click();
-                    return;
+                  try {
+                    // @ts-ignore - 전역 함수 호출
+                    if (typeof window.submitGalaxyForm === 'function') {
+                      // @ts-ignore
+                      window.submitGalaxyForm();
+                      console.log('전역 제출 함수 호출됨');
+                      return;
+                    }
+                    
+                    // 기존 폴백 방식들
+                    const sendButton = document.querySelector('[data-testid="send-button"]');
+                    if (sendButton && sendButton instanceof HTMLButtonElement) {
+                      sendButton.click();
+                      console.log('전송 버튼 클릭됨');
+                      return;
+                    }
+                    
+                    const form = inputEl.closest('form');
+                    if (form) {
+                      console.log('폼 제출 시도');
+                      const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+                      form.dispatchEvent(submitEvent);
+                      return;
+                    }
+                    
+                    console.log('Enter 키 이벤트 발생 시도');
+                    const enterEvent = new KeyboardEvent('keydown', {
+                      key: 'Enter',
+                      code: 'Enter',
+                      which: 13,
+                      keyCode: 13,
+                      bubbles: true,
+                      cancelable: true
+                    });
+                    inputEl.dispatchEvent(enterEvent);
+                  } catch (e) {
+                    console.error('자동 제출 시도 중 오류:', e);
                   }
-                  
-                  // 방법 2: 폼 요소 찾아서 제출
-                  const form = inputEl.closest('form');
-                  if (form) {
-                    const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-                    form.dispatchEvent(submitEvent);
-                    return;
-                  }
-                  
-                  // 방법 3: Enter 키 이벤트 발생시키기
-                  const enterEvent = new KeyboardEvent('keydown', {
-                    key: 'Enter',
-                    code: 'Enter',
-                    which: 13,
-                    keyCode: 13,
-                    bubbles: true,
-                    cancelable: true
-                  });
-                  inputEl.dispatchEvent(enterEvent);
-                }, 300); // 약간의 지연을 두어 UI 업데이트 후 제출되도록 함
+                }, 500); // 타이밍을 500ms로 늘림
               }
             }}
           >
