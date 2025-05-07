@@ -55,37 +55,37 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   const chatModelFromCookie = cookieStore.get('chat-model');
 
   try {
-    if (!chatModelFromCookie) {
-      return (
-        <>
-          <Chat
-            id={chat.id}
-            initialMessages={convertToUIMessages(messagesFromDb)}
-            selectedChatModel={DEFAULT_CHAT_MODEL}
-            selectedVisibilityType={chat.visibility}
-            isReadonly={session?.user?.id !== chat.userId}
-            session={session}
-            registerChatMapping={true}
-          />
-          <DataStreamHandler id={id} />
-        </>
-      );
-    }
-
+  if (!chatModelFromCookie) {
     return (
       <>
         <Chat
           id={chat.id}
           initialMessages={convertToUIMessages(messagesFromDb)}
-          selectedChatModel={chatModelFromCookie.value}
+          selectedChatModel={DEFAULT_CHAT_MODEL}
           selectedVisibilityType={chat.visibility}
           isReadonly={session?.user?.id !== chat.userId}
           session={session}
-          registerChatMapping={true}
+            registerChatMapping={true}
         />
         <DataStreamHandler id={id} />
       </>
     );
+  }
+
+  return (
+    <>
+      <Chat
+        id={chat.id}
+        initialMessages={convertToUIMessages(messagesFromDb)}
+        selectedChatModel={chatModelFromCookie.value}
+        selectedVisibilityType={chat.visibility}
+        isReadonly={session?.user?.id !== chat.userId}
+        session={session}
+          registerChatMapping={true}
+      />
+      <DataStreamHandler id={id} />
+    </>
+  );
   } catch (error) {
     console.error('채팅 페이지 로드 중 오류:', error);
     return (

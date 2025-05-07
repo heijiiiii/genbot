@@ -2,14 +2,147 @@
 
 갤럭시 S25 매뉴얼에 대한 질문과 답변을 제공하는 챗봇 애플리케이션입니다.
 
+## 구현 기능
+
+1. **하이브리드 RAG 검색 시스템**
+   - 벡터 검색(임베딩 기반)과 키워드 검색(BM25)을 결합
+   - Cohere 임베딩 모델 사용
+   - 텍스트와 이미지의 멀티모달 검색 지원
+   - Supabase 벡터 데이터베이스 활용
+
+2. **LangGraph 기반 대화 관리**
+   - 컨텍스트 인식 대화 처리
+   - 대화 이력 관리 및 활용
+   - 검색 결과 순위화 및 필터링
+
+3. **멀티모달 응답 생성**
+   - 텍스트 응답 생성
+   - 관련 이미지 추천 및 표시
+   - 텍스트-이미지 관련성 분석
+
+4. **다양한 프론트엔드 구현**
+   - Next.js 웹 애플리케이션
+   - Streamlit 인터페이스
+   - 모바일 대응 UI
+
+5. **GPT 모델 변경 지원**
+   - GPT-4o
+   - GPT-4.1
+   - GPT-4o mini
+
+6. **채팅 이력 관리**
+   - 사용자별 채팅 이력 저장
+   - 대화 연속성 유지
+   - 데이터베이스 연동 저장 시스템
+
+## 배포 구성
+
+프로젝트는 두 가지 독립적인 배포 구성으로 운영됩니다:
+
+### 1. Railway + Streamlit 구성
+
+```
++------------------+     +------------------+     +----------------+
+|                  |     |                  |     |                |
+|  Streamlit UI    +---->+  FastAPI (Railway)+---->  LangGraph     |
+|  (사용자 인터페이스) |     |  (백엔드 API)     |     |  (대화 관리)    |
+|                  |     |                  |     |                |
++------------------+     +------------------+     +----------------+
+                               |                        |
+                         +----------------+     +----------------+
+                         |                |     |                |
+                         |  Supabase      |     |  OpenAI API    |
+                         |  (벡터 DB)     |     |  (GPT 모델)    |
+                         |                |     |                |
+                         +----------------+     +----------------+
+```
+
+이 구성에서는:
+- FastAPI 백엔드가 Railway에 배포되어 실행됩니다
+- Streamlit 인터페이스에서 Railway 백엔드에 API 요청을 보냅니다
+- 사용자는 Streamlit 웹 인터페이스를 통해 챗봇과 상호작용합니다
+
+### 2. Render + Next.js 구성
+
+```
++------------------+     +------------------+     +----------------+
+|                  |     |                  |     |                |
+|  Next.js UI      +---->+  FastAPI (Render)+---->  LangGraph     |
+|  (웹 인터페이스)   |     |  (백엔드 API)     |     |  (대화 관리)    |
+|                  |     |                  |     |                |
++------------------+     +------------------+     +----------------+
+                               |                        |
+                         +----------------+     +----------------+
+                         |                |     |                |
+                         |  Supabase      |     |  OpenAI API    |
+                         |  (벡터 DB)     |     |  (GPT 모델)    |
+                         |                |     |                |
+                         +----------------+     +----------------+
+```
+
+이 구성에서는:
+- Next.js 프론트엔드와 FastAPI 백엔드가 모두 Render에 배포됩니다
+- 사용자는 Next.js 웹 애플리케이션을 통해 챗봇과 상호작용합니다
+- Render의 CI/CD 파이프라인을 통해 자동 배포됩니다
+
+## 배포 방식
+
+### 1. Railway 배포 (FastAPI + Streamlit)
+   - FastAPI 백엔드를 Railway에 배포
+   - Streamlit 인터페이스를 통해 사용자에게 서비스 제공
+   - 장점: 간편한 배포, 자동 스케일링, 환경 변수 관리 용이
+   - 주로 빠른 프로토타이핑 및 내부 테스트용으로 활용
+
+### 2. Render 배포 (Next.js + FastAPI)
+   - Next.js 프론트엔드를 Render에 배포
+   - FastAPI 백엔드도 별도로 Render에 배포
+   - 장점: 안정적인 프로덕션 환경, 자동 CI/CD 파이프라인
+   - 주로 최종 사용자 서비스용으로 활용
+
+### 3. Docker 컨테이너화
+   - 로컬 개발 환경 일관성
+   - 멀티 스테이지 빌드
+   - 모든 배포 환경에서 일관성 보장
+
 ## 구성 요소
 
-1. **백엔드 (Python FastAPI)**
+1. **백엔드 (Python)**
+   - `galaxy_chatbot.py`: LangGraph 기반 챗봇 코어 로직
    - `app.py`: FastAPI 기반 API 서버
-   - `galaxy_chatbot.py`: LangGraph 기반 챗봇 로직
+   - `streamlit_app.py`: Streamlit 웹 인터페이스
 
 2. **프론트엔드 (Next.js)**
    - `galaxy-web-ui/`: Next.js 웹 애플리케이션
+   - 반응형 UI 컴포넌트
+   - 멀티모달 입력 지원
+
+3. **데이터베이스**
+   - Supabase 벡터 저장소 연동
+   - 사용자 세션 및 채팅 기록 관리
+
+4. **CI/CD 설정**
+   - 자동화된 배포 파이프라인
+   - 환경별 설정 관리
+
+## 주요 개선사항
+
+1. **모델 변경 및 최적화**
+   - GPT-4o, GPT-4.1, GPT-4o mini 모델 선택 지원
+   - 응답 속도 최적화
+
+2. **채팅 기록 관리 개선**
+   - 세션 ID와 데이터베이스 ID 연동
+   - 채팅 이력 저장 및 복원 기능
+
+3. **오류 처리 강화**
+   - PGRST116 오류 처리
+   - 채팅 ID 관련 예외 처리
+   - 네트워크 오류 관리
+
+4. **UI/UX 개선**
+   - 이미지 표시 및 연동 강화
+   - 사용자 경험 최적화
+   - 샘플 질문 관리
 
 ## 환경 변수 설정
 
@@ -54,8 +187,11 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
 # 필요한 패키지 설치
 pip install -r requirements.txt
 
-# 서버 실행
+# FastAPI 서버 실행
 python app.py
+
+# 또는 Streamlit 인터페이스 실행
+streamlit run streamlit_app.py
 ```
 
 ### 프론트엔드
@@ -71,6 +207,72 @@ npm install
 npm run dev
 ```
 
+### Docker 실행
+
+```bash
+# Docker 이미지 빌드
+docker build -t galaxy-chatbot .
+
+# Docker 컨테이너 실행
+docker run -p 8000:8000 -p 8501:8501 galaxy-chatbot
+```
+
 ## 배포
 
-배포 방법에 대한 자세한 내용은 `DEPLOYMENT.md` 파일을 참조하세요.
+### Railway 배포 (FastAPI + Streamlit)
+
+```bash
+# Railway CLI 로그인
+railway login
+
+# 프로젝트 연결
+railway link
+
+# 배포
+railway up
+```
+
+### Render 배포 (Next.js + FastAPI)
+
+1. FastAPI 백엔드 배포:
+   - Render 대시보드에서 "Web Service" 생성
+   - GitHub 저장소 연결
+   - 환경 변수 설정
+   - 빌드 명령: `pip install -r requirements.txt`
+   - 시작 명령: `uvicorn app:app --host 0.0.0.0 --port $PORT`
+
+2. Next.js 프론트엔드 배포:
+   - Render 대시보드에서 "Static Site" 생성
+   - GitHub 저장소의 `galaxy-web-ui` 디렉토리 지정
+   - 빌드 명령: `npm install && npm run build`
+   - 출력 디렉토리: `out`
+   - 환경 변수로 백엔드 API URL 지정
+
+## 기술 스택
+
+- **백엔드**: Python, FastAPI, LangGraph, OpenAI API, Cohere API
+- **프론트엔드**: Next.js, React, TypeScript
+- **데이터베이스**: Supabase
+- **배포**: Railway, Render, Docker
+- **기타**: Streamlit
+
+## 프로젝트 구조
+
+```
+galaxy-rag-chatbot/
+├── app.py                  # FastAPI 서버
+├── galaxy_chatbot.py       # 챗봇 코어 로직
+├── streamlit_app.py        # Streamlit 인터페이스
+├── requirements.txt        # Python 의존성
+├── Dockerfile              # Docker 설정
+├── docker-compose.yml      # Docker Compose 설정
+├── render.yaml             # Render 배포 설정
+├── railway.toml            # Railway 배포 설정
+├── deploy-railway.sh       # Railway 배포 스크립트
+├── galaxy-web-ui/          # Next.js 애플리케이션
+│   ├── components/         # UI 컴포넌트
+│   ├── app/                # 페이지 및 라우팅
+│   ├── lib/                # 유틸리티 함수
+│   └── package.json        # JS 의존성
+└── README.md               # 프로젝트 문서
+```
