@@ -6,7 +6,25 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "https://ywvoksfszaelkceectaa.s
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dm9rc2ZzemFlbGtjZWVjdGFhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NTU0ODUyMCwiZXhwIjoyMDYxMTI0NTIwfQ.KBkf30JIVTc-k0ysyZ_Fen1prSkNZe-p4c2nL6T37hE";
 
 // Supabase 클라이언트 설정
-const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    persistSession: true,
+  },
+  global: {
+    fetch: (url, options) => {
+      return fetch(url, {
+        ...options,
+        // IPv4만 사용하도록 강제
+        headers: {
+          ...options?.headers,
+          'Family-Preference': 'IPv4', // 이 헤더는 프록시나 서버 설정에 따라 작동할 수 있음
+          'apikey': SUPABASE_SERVICE_ROLE_KEY,
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+        }
+      });
+    }
+  }
+});
 
 // UUID 형식 검증 함수
 const isValidUUID = (uuid: string): boolean => {
@@ -43,7 +61,7 @@ export async function GET(request: Request) {
     .from('chats')
     .select('*')
     .eq('id', chatId)
-    .single();
+    .maybeSingle();
 
   if (chatError) {
     console.error('채팅 조회 오류:', chatError);
@@ -113,7 +131,7 @@ export async function PATCH(request: Request) {
     .from('chats')
     .select('*')
     .eq('id', chatId)
-    .single();
+    .maybeSingle();
 
   if (chatError) {
     console.error('채팅 조회 오류:', chatError);
