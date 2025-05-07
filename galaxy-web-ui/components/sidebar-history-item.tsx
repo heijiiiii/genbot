@@ -25,6 +25,7 @@ import {
 } from './icons';
 import { memo } from 'react';
 import { useChatVisibility } from '@/hooks/use-chat-visibility';
+import { cn } from '@/lib/utils';
 
 const PureChatItem = ({
   chat,
@@ -43,17 +44,30 @@ const PureChatItem = ({
   });
 
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={isActive}>
+    <SidebarMenuItem className={cn(
+      "overflow-hidden transition-all duration-200",
+      isActive ? "bg-gradient-to-r from-galaxy-blue/10 to-galaxy-purple/5 border-l-2 border-galaxy-blue" : ""
+    )}>
+      <SidebarMenuButton 
+        asChild 
+        isActive={isActive}
+        className={cn(
+          "transition-all duration-200 hover:bg-galaxy-light rounded-md gap-2 py-2",
+          isActive ? "bg-white/70 shadow-sm font-medium text-galaxy-blue" : ""
+        )}
+      >
         <Link href={`/chat/${chat.id}`} onClick={() => setOpenMobile(false)}>
-          <span>{chat.title}</span>
+          <span className="truncate">{chat.title}</span>
         </Link>
       </SidebarMenuButton>
 
       <DropdownMenu modal={true}>
         <DropdownMenuTrigger asChild>
           <SidebarMenuAction
-            className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground mr-0.5"
+            className={cn(
+              "data-[state=open]:bg-galaxy-light data-[state=open]:text-galaxy-blue mr-0.5 hover:bg-galaxy-light transition-colors duration-200",
+              isActive ? "text-galaxy-blue" : ""
+            )}
             showOnHover={!isActive}
           >
             <MoreHorizontalIcon />
@@ -61,16 +75,16 @@ const PureChatItem = ({
           </SidebarMenuAction>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent side="bottom" align="end">
+        <DropdownMenuContent side="bottom" align="end" className="bg-white border border-galaxy-light shadow-galaxy-message rounded-lg animate-fade-in">
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger className="cursor-pointer">
+            <DropdownMenuSubTrigger className="cursor-pointer hover:bg-galaxy-light hover:text-galaxy-blue">
               <ShareIcon />
               <span>Share</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuPortal>
-              <DropdownMenuSubContent>
+              <DropdownMenuSubContent className="bg-white border border-galaxy-light shadow-galaxy-message rounded-lg">
                 <DropdownMenuItem
-                  className="cursor-pointer flex-row justify-between"
+                  className="cursor-pointer flex-row justify-between hover:bg-galaxy-light hover:text-galaxy-blue transition-colors duration-200"
                   onClick={() => {
                     setVisibilityType('private');
                   }}
@@ -79,12 +93,14 @@ const PureChatItem = ({
                     <LockIcon size={12} />
                     <span>Private</span>
                   </div>
-                  {visibilityType === 'private' ? (
-                    <CheckCircleFillIcon />
-                  ) : null}
+                  {visibilityType === 'private' && (
+                    <div className="text-galaxy-green">
+                      <CheckCircleFillIcon />
+                    </div>
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="cursor-pointer flex-row justify-between"
+                  className="cursor-pointer flex-row justify-between hover:bg-galaxy-light hover:text-galaxy-blue transition-colors duration-200"
                   onClick={() => {
                     setVisibilityType('public');
                   }}
@@ -93,14 +109,18 @@ const PureChatItem = ({
                     <GlobeIcon />
                     <span>Public</span>
                   </div>
-                  {visibilityType === 'public' ? <CheckCircleFillIcon /> : null}
+                  {visibilityType === 'public' && (
+                    <div className="text-galaxy-green">
+                      <CheckCircleFillIcon />
+                    </div>
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
           </DropdownMenuSub>
 
           <DropdownMenuItem
-            className="cursor-pointer text-destructive focus:bg-destructive/15 focus:text-destructive dark:text-red-500"
+            className="cursor-pointer text-galaxy-red hover:bg-galaxy-red/10 hover:text-galaxy-red focus:bg-galaxy-red/15 focus:text-galaxy-red transition-colors duration-200"
             onSelect={() => onDelete(chat.id)}
           >
             <TrashIcon />

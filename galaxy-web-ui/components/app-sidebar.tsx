@@ -23,8 +23,8 @@ export function AppSidebar({ user }: { user: User | undefined }) {
   const { setOpenMobile } = useSidebar();
 
   return (
-    <Sidebar className="group-data-[side=left]:border-r-0">
-      <SidebarHeader>
+    <Sidebar className="group-data-[side=left]:border-r-0 bg-gray-50">
+      <SidebarHeader className="bg-gradient-to-r from-galaxy-navy via-galaxy-blue to-galaxy-purple text-white py-2 shadow-galaxy">
         <SidebarMenu>
           <div className="flex flex-row justify-between items-center">
             <Link
@@ -34,8 +34,8 @@ export function AppSidebar({ user }: { user: User | undefined }) {
               }}
               className="flex flex-row gap-3 items-center"
             >
-              <span className="text-lg font-semibold px-2 hover:bg-muted rounded-md cursor-pointer">
-                Chatbot
+              <span className="text-lg font-semibold px-2 hover:bg-white/10 rounded-md cursor-pointer transition-colors duration-200">
+                Galaxy S25
               </span>
             </Link>
             <Tooltip>
@@ -43,7 +43,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                 <Button
                   variant="ghost"
                   type="button"
-                  className="p-2 h-fit"
+                  className="p-2 h-fit text-white hover:bg-white/20 transition-all duration-200"
                   onClick={() => {
                     setOpenMobile(false);
                     router.push('/');
@@ -58,10 +58,12 @@ export function AppSidebar({ user }: { user: User | undefined }) {
           </div>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarHistory user={user} />
+      <SidebarContent className="px-2 py-3">
+        <div className="space-y-1 animate-fade-in">
+          <SidebarHistory user={user} />
+        </div>
       </SidebarContent>
-      <SidebarFooter>{user && <SidebarUserNav user={user} />}</SidebarFooter>
+      <SidebarFooter className="border-t border-gray-200 bg-white/50">{user && <SidebarUserNav user={user} />}</SidebarFooter>
     </Sidebar>
   );
 }

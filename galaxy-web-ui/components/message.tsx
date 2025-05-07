@@ -230,7 +230,7 @@ const PurePreviewMessage = ({
           )}
         >
           {message.role === 'assistant' && (
-            <div className="size-8 flex items-center rounded-full justify-center ring-1 shrink-0 ring-border bg-background">
+            <div className="size-8 flex items-center rounded-full justify-center ring-1 shrink-0 ring-border bg-gradient-to-br from-galaxy-purple to-galaxy-pink text-white shadow-galaxy-message">
               <div className="translate-y-px">
                 <SparklesIcon size={14} />
               </div>
@@ -277,7 +277,7 @@ const PurePreviewMessage = ({
                             <Button
                               data-testid="message-edit-button"
                               variant="ghost"
-                              className="px-2 h-fit rounded-full text-muted-foreground opacity-0 group-hover/message:opacity-100"
+                              className="px-2 h-fit rounded-full text-muted-foreground opacity-0 group-hover/message:opacity-100 transition-opacity"
                               onClick={() => {
                                 setMode('edit');
                               }}
@@ -292,8 +292,10 @@ const PurePreviewMessage = ({
                       <div
                         data-testid="message-content"
                         className={cn('flex flex-col gap-4 w-full', {
-                          'bg-galaxy-blue text-white px-4 py-3 rounded-2xl shadow-sm':
+                          'bg-gradient-to-br from-galaxy-blue-light to-galaxy-blue text-white px-4 py-3 rounded-2xl shadow-galaxy-message transition-transform hover:scale-[1.01] duration-200':
                             message.role === 'user',
+                          'bg-gradient-to-br from-white via-galaxy-light to-galaxy-gray border border-galaxy-light px-4 py-3 rounded-2xl shadow-galaxy-message hover:shadow-galaxy-hover transition-all duration-200':
+                            message.role === 'assistant',
                         })}
                       >
                         <Markdown>{part.text}</Markdown>
@@ -331,6 +333,7 @@ const PurePreviewMessage = ({
                       key={toolCallId}
                       className={cx({
                         skeleton: ['getWeather'].includes(toolName),
+                        'rounded-xl overflow-hidden shadow-galaxy-message border border-galaxy-light p-2 bg-galaxy-light/30 transition-all duration-200': true,
                       })}
                     >
                       {toolName === 'getWeather' ? (
@@ -358,7 +361,7 @@ const PurePreviewMessage = ({
                   const { result } = toolInvocation;
 
                   return (
-                    <div key={toolCallId}>
+                    <div key={toolCallId} className="rounded-xl overflow-hidden shadow-galaxy-message border border-galaxy-light p-2 bg-galaxy-light/30 transition-all duration-200">
                       {toolName === 'getWeather' ? (
                         <Weather weatherAtLocation={result} />
                       ) : toolName === 'createDocument' ? (
@@ -379,7 +382,7 @@ const PurePreviewMessage = ({
                           isReadonly={isReadonly}
                         />
                       ) : (
-                        <pre>{JSON.stringify(result, null, 2)}</pre>
+                        <pre className="bg-galaxy-gray/50 p-2 rounded-md font-mono text-sm overflow-auto">{JSON.stringify(result, null, 2)}</pre>
                       )}
                     </div>
                   );
@@ -398,7 +401,7 @@ const PurePreviewMessage = ({
                       <Button
                         data-testid="message-edit-button"
                         variant="ghost"
-                        className="px-2 h-fit rounded-full text-muted-foreground opacity-0 group-hover/message:opacity-100"
+                        className="px-2 h-fit rounded-full text-muted-foreground opacity-0 group-hover/message:opacity-100 transition-opacity"
                         onClick={() => {
                           setMode('edit');
                         }}
@@ -413,9 +416,9 @@ const PurePreviewMessage = ({
                 <div
                   data-testid="message-content"
                   className={cn('flex flex-col gap-4 w-full', {
-                    'bg-galaxy-blue text-white px-4 py-3 rounded-2xl shadow-sm':
+                    'bg-gradient-to-br from-galaxy-blue-light to-galaxy-blue text-white px-4 py-3 rounded-2xl shadow-galaxy-message transition-transform hover:scale-[1.01] duration-200':
                       message.role === 'user',
-                    'bg-galaxy-gray border border-gray-200 px-4 py-3 rounded-2xl shadow-sm':
+                    'bg-gradient-to-br from-white via-galaxy-light to-galaxy-gray border border-galaxy-light px-4 py-3 rounded-2xl shadow-galaxy-message hover:shadow-galaxy-hover transition-all duration-200':
                       message.role === 'assistant',
                   })}
                 >
@@ -467,17 +470,17 @@ export const ThinkingMessage = () => {
   return (
     <div className="w-full mx-auto max-w-3xl px-4">
       <div className="flex gap-4">
-        <div className="size-8 flex items-center rounded-full justify-center ring-1 shrink-0 ring-border bg-background">
+        <div className="size-8 flex items-center rounded-full justify-center ring-1 shrink-0 ring-border bg-gradient-to-br from-galaxy-purple to-galaxy-pink text-white animate-pulse">
           <div className="translate-y-px">
             <SparklesIcon size={14} />
           </div>
         </div>
-
+        
         <div className="flex flex-col gap-2">
           <div className="flex gap-1 items-center">
-            <div className="size-2 bg-muted-foreground animate-bounce rounded-full" />
-            <div className="size-2 bg-muted-foreground animate-bounce rounded-full [animation-delay:0.2s]" />
-            <div className="size-2 bg-muted-foreground animate-bounce rounded-full [animation-delay:0.4s]" />
+            <div className="size-2 bg-galaxy-blue animate-bounce rounded-full" />
+            <div className="size-2 bg-galaxy-blue animate-bounce rounded-full [animation-delay:0.2s]" />
+            <div className="size-2 bg-galaxy-blue animate-bounce rounded-full [animation-delay:0.4s]" />
           </div>
         </div>
       </div>

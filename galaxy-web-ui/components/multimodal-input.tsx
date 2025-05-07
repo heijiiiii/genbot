@@ -23,6 +23,7 @@ import { Textarea } from './ui/textarea';
 import { SuggestedActions } from './suggested-actions';
 import equal from 'fast-deep-equal';
 import type { UseChatHelpers } from '@ai-sdk/react';
+import { cn } from '@/lib/utils';
 
 function PureMultimodalInput({
   chatId,
@@ -198,67 +199,77 @@ function PureMultimodalInput({
           {attachments.map((attachment) => (
             <PreviewAttachment key={attachment.url} attachment={attachment} />
           ))}
-
-          {uploadQueue.map((filename) => (
-            <PreviewAttachment
-              key={filename}
-              attachment={{
-                url: '',
-                name: filename,
-                contentType: '',
-              }}
-              isUploading={true}
-            />
+          {uploadQueue.map((file, index) => (
+            <div
+              key={`${file}-${index}`}
+              className="flex flex-col gap-1 items-center p-4 border rounded-xl border-dashed max-w-36 min-w-20 animate-pulse-slow"
+            >
+              <div className="bg-gray-200 rounded-md h-4 w-12 mb-1"></div>
+              <div className="text-xs text-muted-foreground truncate max-w-full">
+                {file.length > 15 ? `${file.slice(0, 15)}...` : file}
+              </div>
+            </div>
           ))}
         </div>
       )}
 
-      {uploadQueue.length > 0 && (
-        <div className="animate-pulse">Uploading {uploadQueue.length} files...</div>
-      )}
-
-      <div className="relative w-full flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        <Textarea
-          data-testid="message-input"
-          ref={textareaRef}
-          tabIndex={0}
-          autoFocus
-          required
-          placeholder="메시지를 입력하세요..."
-          rows={1}
-          value={input}
-          onChange={handleInput}
-          className="min-h-12 p-3 bg-white border-none resize-none text-base focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-              event.preventDefault();
-
-              if (!input) {
-                return;
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          submitForm();
+        }}
+        className="relative"
+      >
+        <div className="flex items-center relative">
+          <Textarea
+            ref={textareaRef}
+            data-testid="multimodal-input"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (
+                event.key === 'Enter' &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                submitForm();
               }
-
-              submitForm();
+            }}
+            placeholder="메시지 입력..."
+            value={input}
+            onChange={handleInput}
+            className="min-h-[58px] rounded-2xl pr-12 border-galaxy-light/70 focus:border-galaxy-blue focus:ring-1 focus:ring-galaxy-blue/50 shadow-galaxy transition-all duration-200 resize-none bg-white placeholder:text-gray-400"
+            disabled={
+              status === 'streaming' ||
+              status === 'submitted' ||
+              uploadQueue.length > 0
             }
-          }}
-        />
+          />
+        </div>
 
-        <div className="flex bg-galaxy-light px-3 py-2 items-center gap-1">
-          <AttachmentsButton
+        <div className="absolute flex gap-1.5 items-center right-2 bottom-2.5">
+          <PureAttachmentsButton
             fileInputRef={fileInputRef}
             status={status}
           />
-
-          {status === 'streaming' && (
-            <StopButton stop={stop} setMessages={setMessages} />
+          {status === 'streaming' ? (
+            <PureStopButton stop={stop} setMessages={setMessages} />
+          ) : (
+            <PureSendButton
+              submitForm={submitForm}
+              input={input}
+              uploadQueue={uploadQueue}
+            />
           )}
-
-          <SendButton
-            submitForm={submitForm}
-            input={input}
-            uploadQueue={uploadQueue}
-          />
         </div>
-      </div>
+      </form>
+
+      {input === '' &&
+        status !== 'streaming' &&
+        messages.length > 0 &&
+        messages[messages.length - 1].role === 'assistant' && (
+          <SuggestedActions chatId={chatId} append={append} />
+        )}
     </div>
   );
 }
@@ -284,14 +295,16 @@ function PureAttachmentsButton({
 }) {
   return (
     <Button
-      data-testid="file-input-button"
-      onClick={() => fileInputRef.current?.click()}
-      disabled={status === 'streaming'}
+      type="button"
       size="icon"
       variant="ghost"
-      className="size-9 rounded-full text-galaxy-navy hover:bg-galaxy-light"
+      className="size-8 text-muted-foreground hover:text-foreground hover:bg-galaxy-light/50 transition-all duration-200 rounded-full"
+      onClick={() => fileInputRef.current?.click()}
+      disabled={status === 'streaming' || status === 'submitted'}
+      data-testid="attachments-button"
     >
       <PaperclipIcon />
+      <span className="sr-only">Add attachment</span>
     </Button>
   );
 }
@@ -310,21 +323,23 @@ function PureStopButton({
 }) {
   return (
     <Button
+      type="button"
+      size="icon"
+      className="size-8 bg-galaxy-red/85 hover:bg-galaxy-red text-white rounded-full shadow-sm hover:shadow-md transition-all duration-200"
       onClick={() => {
         stop();
         setMessages((messages) => {
           const lastMessage = messages[messages.length - 1];
-          if (lastMessage && lastMessage.role === 'assistant') {
-            return messages;
+          if (lastMessage.role === 'assistant') {
+            return messages.slice(0, -1);
           }
-          return messages.slice(0, -1);
+          return messages;
         });
       }}
-      size="icon"
-      variant="ghost"
-      className="size-9 rounded-full text-galaxy-navy hover:bg-galaxy-light"
+      data-testid="stop-button"
     >
       <StopIcon />
+      <span className="sr-only">Stop generating</span>
     </Button>
   );
 }
@@ -340,15 +355,24 @@ function PureSendButton({
   input: string;
   uploadQueue: Array<string>;
 }) {
+  const isEmpty = input.trim().length === 0;
+  const isUploading = uploadQueue.length > 0;
+
   return (
     <Button
-      data-testid="send-button"
-      onClick={() => submitForm()}
-      disabled={!input.trim() || uploadQueue.length > 0}
+      type="submit"
       size="icon"
-      className="ml-auto size-9 rounded-full bg-galaxy-blue hover:bg-galaxy-navy text-white"
+      className={cn(
+        'size-8 transition-all duration-300 rounded-full shadow-sm hover:shadow-md',
+        isEmpty || isUploading
+          ? 'bg-galaxy-blue/40 text-white cursor-not-allowed'
+          : 'bg-gradient-to-r from-galaxy-blue to-galaxy-navy text-white hover:from-galaxy-blue-light hover:to-galaxy-blue transform hover:scale-105'
+      )}
+      disabled={isEmpty || isUploading}
+      data-testid="send-button"
     >
       <ArrowUpIcon />
+      <span className="sr-only">Send message</span>
     </Button>
   );
 }
