@@ -24,9 +24,9 @@ export function AppSidebar({ user }: { user: User | undefined }) {
 
   return (
     <Sidebar className="group-data-[side=left]:border-r-0 bg-gray-50">
-      <SidebarHeader className="bg-gradient-to-r from-galaxy-navy via-galaxy-blue to-galaxy-purple text-white py-2 shadow-galaxy">
-        <SidebarMenu>
-          <div className="flex flex-row justify-between items-center">
+      <SidebarHeader className="bg-gradient-to-r from-galaxy-navy via-galaxy-blue to-galaxy-purple text-white shadow-galaxy h-14">
+        <SidebarMenu className="h-full">
+          <div className="flex flex-row justify-between items-center h-full">
             <Link
               href="/"
               onClick={() => {

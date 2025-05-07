@@ -33,7 +33,7 @@ function PureChatHeader({
   const { width: windowWidth } = useWindowSize();
 
   return (
-    <header className="flex sticky top-0 bg-gradient-to-r from-galaxy-navy via-galaxy-blue to-galaxy-purple animate-gradient-x items-center px-3 md:px-4 gap-2 shadow-galaxy z-50 py-3">
+    <header className="flex sticky top-0 bg-gradient-to-r from-galaxy-navy via-galaxy-blue to-galaxy-purple animate-gradient-x items-center px-3 md:px-4 gap-2 shadow-galaxy z-50 h-14">
       <div className="flex items-center gap-2 w-full">
         <SidebarToggle />
 
