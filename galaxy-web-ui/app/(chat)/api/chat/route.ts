@@ -23,25 +23,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 // Supabase 클라이언트 설정
-const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: {
-    persistSession: true,
-  },
-  global: {
-    fetch: (url, options) => {
-      return fetch(url, {
-        ...options,
-        // IPv4만 사용하도록 강제
-        headers: {
-          ...options?.headers,
-          'Family-Preference': 'IPv4', // 이 헤더는 프록시나 서버 설정에 따라 작동할 수 있음
-          'apikey': SUPABASE_SERVICE_ROLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-        }
-      });
-    }
-  }
-});
+const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // 임베딩 모델 설정
 const cohere_embeddings = new CohereEmbeddings({
@@ -272,15 +254,10 @@ async function saveChat(userId: string, title: string) {
         visibility: 'private'
       }])
       .select('id')
-      .maybeSingle();
+      .single();
     
     if (error) {
       console.error('채팅 저장 오류:', error);
-      return null;
-    }
-    
-    if (!chat) {
-      console.error('채팅 생성 후 ID를 가져오지 못했습니다');
       return null;
     }
     
@@ -303,15 +280,10 @@ async function saveMessage(chatId: string, role: string, content: string) {
         created_at: new Date().toISOString()
       }])
       .select('id')
-      .maybeSingle();
+      .single();
     
     if (error) {
       console.error('메시지 저장 오류:', error);
-      return null;
-    }
-    
-    if (!message) {
-      console.error('메시지 생성 후 ID를 가져오지 못했습니다');
       return null;
     }
     
@@ -319,41 +291,6 @@ async function saveMessage(chatId: string, role: string, content: string) {
   } catch (error) {
     console.error('메시지 저장 오류:', error);
     return null;
-  }
-}
-
-// 사용자 ID 매핑 저장
-async function saveUserIdMapping(nextAuthId: string, supabaseId: string, chatId: string) {
-  try {
-    // 이미 존재하는지 확인
-    const { data: existingMapping } = await client
-      .from('user_mappings')
-      .select('id')
-      .eq('next_auth_id', nextAuthId)
-      .eq('chat_id', chatId)
-      .maybeSingle();
-    
-    if (!existingMapping) {
-      // 새 채팅 매핑 저장
-      const { error } = await client
-        .from('user_mappings')
-        .insert({
-          next_auth_id: nextAuthId,
-          supabase_id: supabaseId,
-          chat_id: chatId,
-          created_at: new Date().toISOString()
-        });
-      
-      if (error) {
-        console.error(`채팅 ID ${chatId}에 대한 매핑 저장 실패:`, error);
-      } else {
-        console.log(`채팅 ID ${chatId}에 대한 새 매핑 저장 성공: ${nextAuthId} -> ${supabaseId}`);
-      }
-    } else {
-      console.log(`채팅 ID ${chatId}에 대한 매핑이 이미 존재함`);
-    }
-  } catch (error) {
-    console.error("채팅 매핑 저장 중 오류:", error);
   }
 }
 
@@ -366,14 +303,10 @@ async function getChatById(chatId: string) {
       return null;
     }
 
-    console.log(`채팅 ID ${chatId}로 단일 채팅 조회 시도`);
-    
-    // single() 메서드를 사용하여 단일 레코드만 조회
     const { data, error } = await client
       .from('chats')
       .select('*')
-      .eq('id', chatId)
-      .single();
+      .eq('id', chatId);
     
     if (error) {
       // PGRST116 오류 처리 추가
@@ -386,22 +319,15 @@ async function getChatById(chatId: string) {
     }
     
     // 결과가 없는 경우 처리
-    if (!data) {
-      console.log(`채팅 ID ${chatId}에 해당하는 채팅이 없습니다.`);
+    if (!data || data.length === 0) {
+      console.log(`채팅 ID ${chatId}에 해당하는 채팅이 없습니다. 빈 배열을 반환합니다`);
       return null;
     }
     
-    console.log(`채팅 ID ${chatId}에 해당하는 채팅 조회 성공:`, {
-      id: data.id,
-      title: data.title,
-      created_at: data.created_at,
-      user_id: data.user_id
-    });
-    
-    // 단일 결과 반환
-    return data;
+    // 첫 번째 결과 반환
+    return data[0];
   } catch (error) {
-    console.error(`채팅 ID ${chatId} 조회 중 오류:`, error);
+    console.error('채팅 가져오기 오류:', error);
     return null;
   }
 }
@@ -471,26 +397,13 @@ export async function POST(request: Request) {
           const existingChat = await getChatById(chatId);
           if (existingChat) {
             newChatId = chatId;
-            
-            // 채팅 존재 시 바로 매핑 정보 저장
-            await saveUserIdMapping(userId, existingChat.user_id, chatId);
           } else {
             // 채팅이 존재하지 않는 경우 새로 생성
             newChatId = await saveChat(userId, `${query.substring(0, 50)}...`);
-            
-            // 새로 생성된 채팅에 대한 매핑 정보 저장
-            if (newChatId) {
-              await saveUserIdMapping(userId, userId, newChatId);
-            }
           }
         } else {
           // 새 채팅 생성
           newChatId = await saveChat(userId, `${query.substring(0, 50)}...`);
-          
-          // 새로 생성된 채팅에 대한 매핑 정보 저장
-          if (newChatId) {
-            await saveUserIdMapping(userId, userId, newChatId);
-          }
         }
         
         if (newChatId) {
@@ -851,16 +764,11 @@ export async function PUT(request: Request) {
       .from('messages')
       .insert([messageData])
       .select('id')
-      .maybeSingle();
+      .single();
     
     if (error) {
       console.error('메시지 저장 오류:', error);
       return new Response('메시지 저장 중 오류가 발생했습니다.', { status: 500 });
-    }
-    
-    if (!message) {
-      console.error('메시지 생성 후 ID를 가져오지 못했습니다');
-      return new Response('메시지 ID를 가져오는 중 오류가 발생했습니다.', { status: 500 });
     }
     
     // 성공 응답에 이미지 정보도 포함

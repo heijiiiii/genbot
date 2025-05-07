@@ -40,25 +40,9 @@ const KNOWN_USER_IDS = [
   "00000000-0000-0000-0000-000000000001"
 ];
 
-// 사용자 ID 매핑 캐시
-const mappingCache: Record<string, { data: string | string[], timestamp: number }> = {};
-const CACHE_TTL = 60 * 1000; // 캐시 유효시간: 60초
-
-// 사용자 ID 매핑 확인 함수 - chat_id 파라미터 추가 및 캐싱 기능 추가
+// 사용자 ID 매핑 확인 함수 - chat_id 파라미터 추가
 const getUserIdMapping = async (nextAuthId: string, chatId?: string) => {
   try {
-    // 캐시 키 생성
-    const cacheKey = chatId ? `${nextAuthId}:${chatId}` : nextAuthId;
-    
-    // 캐시 확인
-    const now = Date.now();
-    if (mappingCache[cacheKey] && (now - mappingCache[cacheKey].timestamp < CACHE_TTL)) {
-      console.log(`캐시에서 매핑 정보 발견: ${cacheKey}`);
-      return mappingCache[cacheKey].data;
-    }
-    
-    console.log(`매핑 정보 조회 시작: nextAuthId=${nextAuthId}, chatId=${chatId || 'none'}`);
-    
     // 특정 채팅 ID에 대한 매핑이 있는지 확인
     if (chatId) {
       const { data: chatMapping, error: chatMappingError } = await client
@@ -66,22 +50,13 @@ const getUserIdMapping = async (nextAuthId: string, chatId?: string) => {
         .select('supabase_id')
         .eq('next_auth_id', nextAuthId)
         .eq('chat_id', chatId)
-        .maybeSingle();
+        .single();
       
       if (!chatMappingError && chatMapping && chatMapping.supabase_id) {
         console.log(`채팅 ID ${chatId}에 대한 매핑 발견: ${nextAuthId} -> ${chatMapping.supabase_id}`);
-        
-        // 결과 캐싱
-        mappingCache[cacheKey] = { 
-          data: chatMapping.supabase_id,
-          timestamp: now
-        };
-        
         return chatMapping.supabase_id;
       }
     }
-    
-    console.log(`특정 채팅 ID에 대한 매핑 없음, 기본 매핑 확인 중`);
     
     // 기본 매핑 확인 (chat_id가 NULL)
     const { data: mapping, error: mappingError } = await client
@@ -89,30 +64,16 @@ const getUserIdMapping = async (nextAuthId: string, chatId?: string) => {
       .select('supabase_id')
       .eq('next_auth_id', nextAuthId)
       .is('chat_id', null)
-      .maybeSingle();
+      .single();
 
     if (!mappingError && mapping && mapping.supabase_id) {
-      console.log(`기본 매핑 테이블에서 ID 찾음: ${nextAuthId} -> ${mapping.supabase_id}`);
-      
-      // 결과 캐싱
-      mappingCache[cacheKey] = { 
-        data: mapping.supabase_id,
-        timestamp: now
-      };
-      
+      console.log(`매핑 테이블에서 ID 찾음: ${nextAuthId} -> ${mapping.supabase_id}`);
       return mapping.supabase_id;
     }
 
     // 매핑이 없으면 기본 ID 목록 사용
     console.log(`매핑 테이블에서 ID를 찾지 못함: ${nextAuthId}. 기본 ID 목록 사용`);
     const allPossibleIds = [nextAuthId, ...KNOWN_USER_IDS];
-    
-    // 결과 캐싱
-    mappingCache[cacheKey] = { 
-      data: allPossibleIds,
-      timestamp: now
-    };
-    
     return allPossibleIds;
   } catch (error) {
     console.error("ID 매핑 조회 중 오류:", error);
@@ -124,23 +85,15 @@ const getUserIdMapping = async (nextAuthId: string, chatId?: string) => {
 // 채팅 조회 시 새 매핑 저장
 const saveNewChatMapping = async (nextAuthId: string, supabaseId: string, chatId: string) => {
   try {
-    console.log(`매핑 저장 시도: nextAuthId=${nextAuthId}, supabaseId=${supabaseId}, chatId=${chatId}`);
-    
     // 이미 존재하는지 확인
-    const { data: existingMapping, error: checkError } = await client
+    const { data: existingMapping } = await client
       .from('user_mappings')
       .select('id')
       .eq('next_auth_id', nextAuthId)
       .eq('chat_id', chatId)
-      .maybeSingle();
-    
-    if (checkError) {
-      console.error(`매핑 확인 중 오류:`, checkError);
-    }
+      .single();
     
     if (!existingMapping) {
-      console.log(`새 매핑 저장 시작: ${nextAuthId} -> ${supabaseId} (chatId: ${chatId})`);
-      
       // 새 채팅 매핑 저장
       const { error } = await client
         .from('user_mappings')
@@ -155,14 +108,7 @@ const saveNewChatMapping = async (nextAuthId: string, supabaseId: string, chatId
         console.error(`채팅 ID ${chatId}에 대한 매핑 저장 실패:`, error);
       } else {
         console.log(`채팅 ID ${chatId}에 대한 새 매핑 저장 성공: ${nextAuthId} -> ${supabaseId}`);
-        
-        // 매핑 캐시 무효화
-        const cacheKey = `${nextAuthId}:${chatId}`;
-        delete mappingCache[cacheKey];
-        console.log(`매핑 캐시 무효화: ${cacheKey}`);
       }
-    } else {
-      console.log(`채팅 ID ${chatId}에 대한 매핑이 이미 존재함 (ID: ${existingMapping.id})`);
     }
   } catch (error) {
     console.error("채팅 매핑 저장 중 오류:", error);
@@ -214,14 +160,8 @@ export async function GET(request: NextRequest) {
     
     // 매핑 테이블을 통해 사용 가능한 사용자 ID 목록 가져오기
     // 특정 채팅 ID가 있는 경우 해당 매핑 사용
-    console.log(`사용자 ID 매핑 조회 시작: nextAuthId=${currentUserId}, chatId=${chatId || 'none'}`);
     const userIds = await getUserIdMapping(currentUserId, chatId);
-    
-    if (Array.isArray(userIds)) {
-      console.log(`조회할 사용자 ID 목록: ${userIds.length}개 ID - ${userIds.join(', ')}`);
-    } else {
-      console.log(`조회할 단일 사용자 ID: ${userIds}`);
-    }
+    console.log(`조회할 사용자 ID: ${Array.isArray(userIds) ? userIds.join(', ') : userIds}`);
     
     // 모든 채팅 조회 쿼리 생성
     let query = client
@@ -230,20 +170,9 @@ export async function GET(request: NextRequest) {
     
     // 단일 ID인 경우 eq, 다중 ID인 경우 in 사용  
     if (Array.isArray(userIds)) {
-      if (userIds.length === 0) {
-        console.log('매핑된 사용자 ID가 없음 - 빈 결과 반환');
-        return Response.json({ chats: [], hasMore: false });
-      } else if (userIds.length === 1) {
-        // 단일 ID로 조회
-        query = query.eq('user_id', userIds[0]);
-        console.log(`단일 사용자 ID로 처리: ${userIds[0]}`);
-      } else {
-        // 다중 ID로 조회
-        query = query.in('user_id', userIds);
-        console.log(`여러 사용자 ID로 채팅 조회 중: ${userIds.length}개 ID`);
-      }
+      query = query.in('user_id', userIds);
+      console.log(`여러 사용자 ID로 채팅 조회 중: ${userIds.length}개 ID`);
     } else {
-      // 단일 문자열 ID
       query = query.eq('user_id', userIds);
       console.log(`단일 사용자 ID로 채팅 조회 중: ${userIds}`);
     }
@@ -266,7 +195,7 @@ export async function GET(request: NextRequest) {
         .from('chats')
         .select('created_at')
         .eq('id', startingAfter)
-        .maybeSingle();
+        .single();
 
       if (selectedChat) {
         console.log(`기준 채팅 created_at: ${selectedChat.created_at}`);
@@ -280,7 +209,7 @@ export async function GET(request: NextRequest) {
         .from('chats')
         .select('created_at')
         .eq('id', endingBefore)
-        .maybeSingle();
+        .single();
 
       if (selectedChat) {
         console.log(`기준 채팅 created_at: ${selectedChat.created_at}`);

@@ -41,7 +41,7 @@ const saveUserIdMapping = async (nextAuthId: string, supabaseId: string, chatId?
         .select('*')
         .eq('next_auth_id', nextAuthId)
         .eq('chat_id', chatId)
-        .maybeSingle();
+        .single();
       
       if (existingChatMapping) {
         // 이미 존재하면 업데이트
@@ -85,7 +85,7 @@ const saveUserIdMapping = async (nextAuthId: string, supabaseId: string, chatId?
       .select('*')
       .eq('next_auth_id', nextAuthId)
       .is('chat_id', null)
-      .maybeSingle();
+      .single();
     
     if (existingMapping) {
       // 이미 존재하면 업데이트
