@@ -1,7 +1,48 @@
 import { motion } from 'framer-motion';
 import { SparklesIcon } from './icons';
+import { useCallback } from 'react';
 
 export const Greeting = () => {
+  const handleQuestionClick = useCallback((questionText: string) => {
+    try {
+      const event = new CustomEvent('galaxy:question-selected', { 
+        detail: { question: questionText },
+        bubbles: true 
+      });
+      window.dispatchEvent(event);
+      
+      setTimeout(() => {
+        const inputField = document.querySelector('[data-testid="multimodal-input"]') as HTMLTextAreaElement;
+        if (inputField) {
+          inputField.value = questionText;
+          
+        const inputEvent = new Event('input', { bubbles: true });
+        inputField.dispatchEvent(inputEvent);
+        
+        inputField.focus();
+        
+        setTimeout(() => {
+          try {
+            const keyEvent = new KeyboardEvent('keydown', {
+              bubbles: true,
+              cancelable: true,
+              key: 'Enter',
+              code: 'Enter',
+              keyCode: 13,
+              which: 13
+            });
+            inputField.dispatchEvent(keyEvent);
+          } catch (err) {
+            console.error('Enter 키 이벤트 발생 실패:', err);
+          }
+        }, 100);
+      }
+    }, 100);
+    } catch (error) {
+      console.error('샘플 질문 선택 처리 중 오류:', error);
+    }
+  }, []);
+
   return (
     <div
       key="overview"
@@ -56,72 +97,7 @@ export const Greeting = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8 + i * 0.1 }}
             className="p-4 bg-white border border-galaxy-light rounded-xl shadow-galaxy hover:shadow-galaxy-hover transition-all duration-200 cursor-pointer transform hover:scale-[1.02] hover:bg-galaxy-light/20"
-            onClick={() => {
-              const inputEl = document.querySelector('[data-testid="multimodal-input"]') as HTMLTextAreaElement;
-              if (inputEl) {
-                // 텍스트 입력 설정
-                inputEl.value = item.title;
-                inputEl.focus();
-                
-                // 입력 변경 이벤트 발생 - React 이벤트를 위한 처리 추가
-                const event = new Event('input', { bubbles: true, cancelable: true });
-                inputEl.dispatchEvent(event);
-                
-                // 직접 setInput 호출을 위한 좀 더 확실한 방법
-                try {
-                  // @ts-ignore - 전역 객체 접근
-                  if (window.__NEXT_DATA__ && window.__NEXT_DATA__.props) {
-                    // 입력 값 강제 업데이트 시도
-                    const changeEvent = new Event('change', { bubbles: true });
-                    inputEl.dispatchEvent(changeEvent);
-                  }
-                } catch (e) {
-                  console.error('React state 업데이트 시도 중 오류:', e);
-                }
-                
-                // 지연 시간 후 전역 함수 호출
-                setTimeout(() => {
-                  try {
-                    // @ts-ignore - 전역 함수 호출
-                    if (typeof window.submitGalaxyForm === 'function') {
-                      // @ts-ignore
-                      window.submitGalaxyForm();
-                      console.log('전역 제출 함수 호출됨');
-                      return;
-                    }
-                    
-                    // 기존 폴백 방식들
-                    const sendButton = document.querySelector('[data-testid="send-button"]');
-                    if (sendButton && sendButton instanceof HTMLButtonElement) {
-                      sendButton.click();
-                      console.log('전송 버튼 클릭됨');
-                      return;
-                    }
-                    
-                    const form = inputEl.closest('form');
-                    if (form) {
-                      console.log('폼 제출 시도');
-                      const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-                      form.dispatchEvent(submitEvent);
-                      return;
-                    }
-                    
-                    console.log('Enter 키 이벤트 발생 시도');
-                    const enterEvent = new KeyboardEvent('keydown', {
-                      key: 'Enter',
-                      code: 'Enter',
-                      which: 13,
-                      keyCode: 13,
-                      bubbles: true,
-                      cancelable: true
-                    });
-                    inputEl.dispatchEvent(enterEvent);
-                  } catch (e) {
-                    console.error('자동 제출 시도 중 오류:', e);
-                  }
-                }, 500); // 타이밍을 500ms로 늘림
-              }
-            }}
+            onClick={() => handleQuestionClick(item.title)}
           >
             <h3 className="font-medium text-galaxy-blue">{item.title}</h3>
             <p className="text-sm text-zinc-500">{item.description}</p>

@@ -132,11 +132,28 @@ function PureMultimodalInput({
     // @ts-ignore
     window.submitGalaxyForm = submitForm;
     
+    // 샘플 질문 선택 이벤트 리스너 추가
+    const handleQuestionSelected = (e: any) => {
+      if (e.detail && e.detail.question) {
+        const questionText = e.detail.question;
+        // 입력 설정
+        setInput(questionText);
+        
+        // 약간의 지연 후 폼 제출
+        setTimeout(() => {
+          submitForm();
+        }, 100);
+      }
+    };
+    
+    window.addEventListener('galaxy:question-selected', handleQuestionSelected);
+    
     return () => {
       // @ts-ignore
       delete window.submitGalaxyForm;
+      window.removeEventListener('galaxy:question-selected', handleQuestionSelected);
     };
-  }, [submitForm]);
+  }, [submitForm, setInput]);
 
   const uploadFile = async (file: File) => {
     const formData = new FormData();
