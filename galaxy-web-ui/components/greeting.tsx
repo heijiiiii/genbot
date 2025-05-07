@@ -32,7 +32,7 @@ export const Greeting = () => {
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 20 }}
         transition={{ delay: 0.6, type: "spring" }}
-        className="text-xl text-zinc-500 text-center max-w-md"
+        className="text-lg text-zinc-500 text-center max-w-md whitespace-nowrap"
       >
         안녕하세요! Galaxy S25에 대해 어떤 도움이 필요하신가요?
       </motion.div>
