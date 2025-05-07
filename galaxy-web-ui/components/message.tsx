@@ -292,7 +292,7 @@ const PurePreviewMessage = ({
                       <div
                         data-testid="message-content"
                         className={cn('flex flex-col gap-4 w-full', {
-                          'bg-primary text-primary-foreground px-3 py-2 rounded-xl':
+                          'bg-galaxy-blue text-white px-4 py-3 rounded-2xl shadow-sm':
                             message.role === 'user',
                         })}
                       >
@@ -413,8 +413,10 @@ const PurePreviewMessage = ({
                 <div
                   data-testid="message-content"
                   className={cn('flex flex-col gap-4 w-full', {
-                    'bg-primary text-primary-foreground px-3 py-2 rounded-xl':
+                    'bg-galaxy-blue text-white px-4 py-3 rounded-2xl shadow-sm':
                       message.role === 'user',
+                    'bg-galaxy-gray border border-gray-200 px-4 py-3 rounded-2xl shadow-sm':
+                      message.role === 'assistant',
                   })}
                 >
                   <Markdown>{message.content}</Markdown>

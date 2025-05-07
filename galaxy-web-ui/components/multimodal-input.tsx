@@ -213,64 +213,67 @@ function PureMultimodalInput({
         </div>
       )}
 
-      <Textarea
-        data-testid="multimodal-input"
-        ref={textareaRef}
-        placeholder="Send a message..."
-        value={input}
-        onChange={handleInput}
-        className={cx(
-          'min-h-[24px] max-h-[calc(75dvh)] overflow-hidden resize-none rounded-2xl !text-base bg-muted pb-10 dark:border-zinc-700',
-          className,
-        )}
-        rows={2}
-        autoFocus
-        onKeyDown={(event) => {
-          if (
-            event.key === 'Enter' &&
-            !event.shiftKey &&
-            !event.nativeEvent.isComposing
-          ) {
-            event.preventDefault();
+      {uploadQueue.length > 0 && (
+        <div className="animate-pulse">Uploading {uploadQueue.length} files...</div>
+      )}
 
-            if (status !== 'ready') {
-              toast.error('Please wait for the model to finish its response!');
-            } else {
+      <div className="relative w-full flex flex-col bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <Textarea
+          data-testid="message-input"
+          ref={textareaRef}
+          tabIndex={0}
+          autoFocus
+          required
+          placeholder="메시지를 입력하세요..."
+          rows={1}
+          value={input}
+          onChange={handleInput}
+          className="min-h-12 p-3 bg-white border-none resize-none text-base focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+
+              if (!input) {
+                return;
+              }
+
               submitForm();
             }
-          }
-        }}
-      />
+          }}
+        />
 
-      <div className="absolute bottom-0 p-2 w-fit flex flex-row justify-start">
-        <AttachmentsButton fileInputRef={fileInputRef} status={status} />
-      </div>
+        <div className="flex bg-galaxy-light px-3 py-2 items-center gap-1">
+          <AttachmentsButton
+            fileInputRef={fileInputRef}
+            status={status}
+          />
 
-      <div className="absolute bottom-0 right-0 p-2 w-fit flex flex-row justify-end">
-        {status === 'submitted' ? (
-          <StopButton stop={stop} setMessages={setMessages} />
-        ) : (
+          {status === 'streaming' && (
+            <StopButton stop={stop} setMessages={setMessages} />
+          )}
+
           <SendButton
-            input={input}
             submitForm={submitForm}
+            input={input}
             uploadQueue={uploadQueue}
           />
-        )}
+        </div>
       </div>
     </div>
   );
 }
 
-export const MultimodalInput = memo(
-  PureMultimodalInput,
-  (prevProps, nextProps) => {
-    if (prevProps.input !== nextProps.input) return false;
-    if (prevProps.status !== nextProps.status) return false;
-    if (!equal(prevProps.attachments, nextProps.attachments)) return false;
-
-    return true;
-  },
-);
+export const MultimodalInput = memo(PureMultimodalInput, (prev, next) => {
+  return (
+    prev.input === next.input &&
+    prev.status === next.status &&
+    equal(prev.attachments, next.attachments) &&
+    prev.messages.length === next.messages.length &&
+    (prev.messages.length === 0 ||
+      prev.messages[prev.messages.length - 1].id ===
+        next.messages[next.messages.length - 1].id)
+  );
+});
 
 function PureAttachmentsButton({
   fileInputRef,
@@ -281,21 +284,22 @@ function PureAttachmentsButton({
 }) {
   return (
     <Button
-      data-testid="attachments-button"
-      className="rounded-md rounded-bl-lg p-[7px] h-fit dark:border-zinc-700 hover:dark:bg-zinc-900 hover:bg-zinc-200"
-      onClick={(event) => {
-        event.preventDefault();
-        fileInputRef.current?.click();
-      }}
-      disabled={status !== 'ready'}
+      data-testid="file-input-button"
+      onClick={() => fileInputRef.current?.click()}
+      disabled={status === 'streaming'}
+      size="icon"
       variant="ghost"
+      className="size-9 rounded-full text-galaxy-navy hover:bg-galaxy-light"
     >
-      <PaperclipIcon size={14} />
+      <PaperclipIcon />
     </Button>
   );
 }
 
-const AttachmentsButton = memo(PureAttachmentsButton);
+const AttachmentsButton = memo(
+  PureAttachmentsButton,
+  (prev, next) => prev.status === next.status,
+);
 
 function PureStopButton({
   stop,
@@ -306,15 +310,21 @@ function PureStopButton({
 }) {
   return (
     <Button
-      data-testid="stop-button"
-      className="rounded-full p-1.5 h-fit border dark:border-zinc-600"
-      onClick={(event) => {
-        event.preventDefault();
+      onClick={() => {
         stop();
-        setMessages((messages) => messages);
+        setMessages((messages) => {
+          const lastMessage = messages[messages.length - 1];
+          if (lastMessage && lastMessage.role === 'assistant') {
+            return messages;
+          }
+          return messages.slice(0, -1);
+        });
       }}
+      size="icon"
+      variant="ghost"
+      className="size-9 rounded-full text-galaxy-navy hover:bg-galaxy-light"
     >
-      <StopIcon size={14} />
+      <StopIcon />
     </Button>
   );
 }
@@ -333,14 +343,12 @@ function PureSendButton({
   return (
     <Button
       data-testid="send-button"
-      className="rounded-full p-1.5 h-fit border dark:border-zinc-600"
-      onClick={(event) => {
-        event.preventDefault();
-        submitForm();
-      }}
-      disabled={input.length === 0 || uploadQueue.length > 0}
+      onClick={() => submitForm()}
+      disabled={!input.trim() || uploadQueue.length > 0}
+      size="icon"
+      className="ml-auto size-9 rounded-full bg-galaxy-blue hover:bg-galaxy-navy text-white"
     >
-      <ArrowUpIcon size={14} />
+      <ArrowUpIcon />
     </Button>
   );
 }

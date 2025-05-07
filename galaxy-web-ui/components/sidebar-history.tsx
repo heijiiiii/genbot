@@ -188,7 +188,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   if (isLoading) {
     return (
       <SidebarGroup>
-        <div className="px-2 py-1 text-xs text-sidebar-foreground/50">
+        <div className="px-2 py-1 text-xs text-galaxy-navy font-medium">
           Today
         </div>
         <SidebarGroupContent>
@@ -199,12 +199,8 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                 className="rounded-md h-8 flex gap-2 px-2 items-center"
               >
                 <div
-                  className="h-4 rounded-md flex-1 max-w-[--skeleton-width] bg-sidebar-accent-foreground/10"
-                  style={
-                    {
-                      '--skeleton-width': `${item}%`,
-                    } as React.CSSProperties
-                  }
+                  className="h-[14px] bg-sidebar-foreground/20 rounded animate-pulse"
+                  style={{ width: `${item}%` }}
                 />
               </div>
             ))}
@@ -217,11 +213,9 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   if (hasEmptyChatHistory) {
     return (
       <SidebarGroup>
-        <SidebarGroupContent>
-          <div className="px-2 text-zinc-500 w-full flex flex-row justify-center items-center text-sm gap-2">
-            채팅을 시작하면 대화 기록이 저장됩니다.
-          </div>
-        </SidebarGroupContent>
+        <div className="px-2 py-1 text-xs text-galaxy-navy font-medium">
+          Your conversations will appear here once you start chatting!
+        </div>
       </SidebarGroup>
     );
   }
@@ -233,7 +227,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   return (
     <>
       <SidebarGroup>
-        <div className="px-2 py-1 text-xs text-sidebar-foreground/50">
+        <div className="px-2 py-1 text-xs text-galaxy-navy font-medium">
           채팅 기록
         </div>
         <SidebarGroupContent>

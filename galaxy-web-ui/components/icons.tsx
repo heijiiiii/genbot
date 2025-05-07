@@ -56,7 +56,7 @@ export const AttachmentIcon = () => {
   );
 };
 
-export const VercelIcon = ({ size = 17 }) => {
+export const VercelIcon = ({ size = 17, className = '' }: { size?: number; className?: string }) => {
   return (
     <svg
       height={size}
@@ -64,11 +64,12 @@ export const VercelIcon = ({ size = 17 }) => {
       viewBox="0 0 16 16"
       width={size}
       style={{ color: 'currentcolor' }}
+      className={className}
     >
       <path
         fillRule="evenodd"
         clipRule="evenodd"
-        d="M8 1L16 15H0L8 1Z"
+        d="M8 0L16 16H0L8 0Z"
         fill="currentColor"
       />
     </svg>
