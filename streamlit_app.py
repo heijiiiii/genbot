@@ -13,7 +13,7 @@ st.set_page_config(
     page_title="갤럭시 S25 매뉴얼 챗봇",
     page_icon="🌌",
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # API 엔드포인트 설정 - Railway 배포 URL 사용 (트레일링 슬래시 제거)
@@ -36,6 +36,53 @@ if "debug_mode" not in st.session_state:
 # UI 스타일 정의
 st.markdown("""
 <style>
+    /* 전체 사이드바 컨테이너 스타일 */
+    section[data-testid="stSidebar"] {
+        background-color: #f8f9fa;
+    }
+    
+    /* 사이드바 내부 여백 설정 */
+    .sidebar-content {
+        padding: 1rem 0.8rem;
+    }
+    
+    /* 섹션 헤더 스타일 */
+    .section-header {
+        color: #2C3E50;
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    /* 데이터 경로 카드 스타일 */
+    .data-card {
+        background-color: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        margin-bottom: 1rem;
+    }
+    
+    /* 경로 레이블 스타일 */
+    .info-label {
+        color: #2C3E50;
+        font-size: 0.9rem;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* 경로 텍스트 스타일 */
+    .info-text {
+        color: #666;
+        font-size: 0.85rem;
+        line-height: 1.4;
+        word-break: break-all;
+    }
+    
+    /* 기본 스타일 유지 */
     .main-header {
         font-size: 2.5rem;
         color: #1E88E5;
@@ -95,6 +142,25 @@ st.markdown("""
         border-radius: 25px;
         padding: 0.5rem 2rem;
     }
+    
+    /* 새로운 기능 컴포넌트 스타일 */
+    .feature-card {
+        background-color: #f8f9fa;
+        border-left: 3px solid #1E88E5;
+        padding: 0.8rem;
+        border-radius: 4px;
+        margin-bottom: 0.8rem;
+    }
+    .feature-title {
+        font-weight: 600;
+        color: #1E88E5;
+        font-size: 0.9rem;
+        margin-bottom: 0.3rem;
+    }
+    .feature-desc {
+        font-size: 0.8rem;
+        color: #555;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -104,19 +170,57 @@ st.markdown('<div class="sub-header">갤럭시 S25에 관한 질문을 자유롭
 
 # API 상태 및 디버그 모드 (사이드바에 표시)
 with st.sidebar:
-    st.write("### 시스템 상태")
-    st.info(api_status)
+    st.markdown('<div class="sidebar-content">', unsafe_allow_html=True)
     
-    st.write("### 설정")
+    # 시스템 상태 섹션
+    st.markdown('<div class="section-header">🖥️ 시스템 상태</div>', unsafe_allow_html=True)
+    
+    # 서버 상태 카드
+    st.markdown(f"""
+    <div class="data-card">
+        <div class="info-label"><strong>🔌 API 서버 상태</strong></div>
+        <div class="info-text">{api_status}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 설정 섹션
+    st.markdown('<div class="section-header">⚙️ 설정</div>', unsafe_allow_html=True)
+    
     debug_mode = st.checkbox("디버그 모드", value=st.session_state.debug_mode)
     if debug_mode != st.session_state.debug_mode:
         st.session_state.debug_mode = debug_mode
         st.rerun()
     
-    # 간단한 검색 기능 (API 테스트용)
-    st.write("### 검색 테스트")
-    search_query = st.text_input("검색어", key="search_query")
-    if st.button("검색"):
+    # 주요 기능 소개 섹션
+    st.markdown('<div class="section-header">📱 주요 기능</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="data-card">
+        <div class="feature-card">
+            <div class="feature-title">📷 카메라 기능</div>
+            <div class="feature-desc">초고화질 사진과 동영상을 촬영하는 방법을 알아보세요.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-title">🔋 배터리 관리</div>
+            <div class="feature-desc">배터리 수명을 최대화하는 팁과 설정을 확인하세요.</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-title">🧠 갤럭시 AI</div>
+            <div class="feature-desc">갤럭시 S25의 AI 기능과 활용법을 알아보세요.</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # 검색 기능 섹션
+    st.markdown('<div class="section-header">🔍 검색 테스트</div>', unsafe_allow_html=True)
+    
+    st.markdown("""
+    <div class="data-card">
+        <div class="info-label"><strong>검색어 입력</strong></div>
+    """, unsafe_allow_html=True)
+    
+    search_query = st.text_input("검색어", key="search_query", label_visibility="collapsed")
+    if st.button("검색", use_container_width=True):
         try:
             with st.spinner("검색 중..."):
                 search_response = requests.post(
@@ -129,12 +233,18 @@ with st.sidebar:
                     search_data = search_response.json()
                     st.success("검색 성공!")
                     for i, result in enumerate(search_data.get("results", [])):
-                        st.write(f"**결과 {i+1}**")
-                        st.write(result.get("content", "내용 없음")[:200] + "...")
+                        st.markdown(f"""
+                        <div class="data-card">
+                            <div class="info-label"><strong>결과 {i+1}</strong></div>
+                            <div class="info-text">{result.get('content', '내용 없음')[:200]}...</div>
+                        </div>
+                        """, unsafe_allow_html=True)
                 else:
                     st.error(f"검색 오류: {search_response.status_code}")
         except Exception as e:
             st.error(f"검색 중 오류 발생: {str(e)}")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # 챗 대화 이력 초기화
 if "messages" not in st.session_state:
@@ -187,12 +297,14 @@ for message in st.session_state.messages:
             st.write("")
 
 # 사용자 입력 - 매번 다른 키 사용
+st.markdown('<div class="input-container">', unsafe_allow_html=True)
 user_input = st.text_input(
     "메시지 입력", 
     placeholder="질문을 입력하세요...", 
     key=f"user_input_{st.session_state.input_key}",
     label_visibility="collapsed"
 )
+st.markdown('</div>', unsafe_allow_html=True)
 
 # 전송 버튼 클릭 또는 Enter 키 누를 때
 if user_input:
