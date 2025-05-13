@@ -19,6 +19,12 @@ export default async function Page() {
   const cookieStore = await cookies();
   const modelIdFromCookie = cookieStore.get('chat-model');
 
+  // 사용자 타입 확인 (게스트 또는 로그인 사용자)
+  const isGuest = session.user.type === 'guest';
+  
+  // 게스트 사용자는 대화 이력을 저장하지 않음
+  const shouldRegisterChatMapping = !isGuest;
+
   if (!modelIdFromCookie) {
     return (
       <>
@@ -30,6 +36,7 @@ export default async function Page() {
           selectedVisibilityType="private"
           isReadonly={false}
           session={session}
+          registerChatMapping={shouldRegisterChatMapping}
         />
         <DataStreamHandler id={id} />
       </>
@@ -46,6 +53,7 @@ export default async function Page() {
         selectedVisibilityType="private"
         isReadonly={false}
         session={session}
+        registerChatMapping={shouldRegisterChatMapping}
       />
       <DataStreamHandler id={id} />
     </>

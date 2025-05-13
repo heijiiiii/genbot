@@ -145,12 +145,19 @@ export async function GET(request: NextRequest) {
     인증상태: session?.user?.id ? "인증됨" : "인증 안됨",
     유저ID: session?.user?.id || "없음",
     이메일: session?.user?.email || "없음",
-    이름: session?.user?.name || "없음"
+    이름: session?.user?.name || "없음",
+    타입: session?.user?.type || "없음"
   });
 
   if (!session?.user?.id) {
     console.log("오류: 인증되지 않은 사용자");
     return Response.json('Unauthorized!', { status: 401 });
+  }
+  
+  // 게스트 사용자는 대화 이력을 보지 않음
+  if (session.user.type === 'guest') {
+    console.log("게스트 사용자는 대화 이력을 볼 수 없습니다");
+    return Response.json({ chats: [], hasMore: false });
   }
 
   try {
@@ -248,17 +255,26 @@ export async function GET(request: NextRequest) {
     } else {
       console.log('채팅 기록이 없습니다.');
     }
-    
-    const hasMore = chats && chats.length > limit;
-    const result = {
-      chats: hasMore ? chats.slice(0, limit) : chats,
-      hasMore
-    };
 
-    console.log(`응답 데이터: ${result.chats.length}개 채팅, hasMore=${result.hasMore}`);
-    return Response.json(result);
-  } catch (error) {
-    console.error('데이터베이스에서 채팅 목록 조회 실패:', error);
-    return Response.json({ error: '채팅 목록을 불러올 수 없습니다' }, { status: 500 });
+    const hasMore = chats ? chats.length > limit : false;
+    const slicedChats = hasMore ? chats.slice(0, limit) : chats || [];
+
+    return Response.json({
+      chats: slicedChats.map((chat) => ({
+        id: chat.id,
+        title: chat.title,
+        createdAt: chat.created_at,
+        userId: chat.user_id,
+        visibility: 'private',
+      })),
+      hasMore,
+    });
+  } catch (error: any) {
+    console.error('채팅 목록 조회 중 오류 발생:', error);
+    
+    return Response.json(
+      { error: `채팅 목록을 불러올 수 없습니다: ${error.message}` },
+      { status: 500 },
+    );
   }
 } 

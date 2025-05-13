@@ -63,7 +63,25 @@ export function AppSidebar({ user }: { user: User | undefined }) {
           <SidebarHistory user={user} />
         </div>
       </SidebarContent>
-      <SidebarFooter className="border-t border-gray-200 bg-white/50">{user && <SidebarUserNav user={user} />}</SidebarFooter>
+      <SidebarFooter className="border-t border-gray-200 bg-white/50">
+        {user ? (
+          <SidebarUserNav user={user} />
+        ) : (
+          <div className="p-3">
+            <Link href="/login">
+              <Button className="w-full bg-galaxy-blue hover:bg-galaxy-navy text-white">
+                로그인
+              </Button>
+            </Link>
+            <div className="text-center mt-2 text-xs text-gray-500">
+              <span>계정이 없으신가요? </span>
+              <Link href="/register" className="text-galaxy-blue hover:underline">
+                회원가입
+              </Link>
+            </div>
+          </div>
+        )}
+      </SidebarFooter>
     </Sidebar>
   );
 }
