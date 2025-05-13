@@ -24,6 +24,10 @@ export async function middleware(request: NextRequest) {
   });
 
   if (!token) {
+    if (['/login', '/register'].includes(pathname)) {
+      return NextResponse.next();
+    }
+    
     const redirectUrl = encodeURIComponent(request.url);
 
     return NextResponse.redirect(
