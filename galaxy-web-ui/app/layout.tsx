@@ -8,8 +8,13 @@ import { SessionProvider } from 'next-auth/react';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://chat.vercel.ai'),
-  title: 'Next.js Chatbot Template',
-  description: 'Next.js chatbot template using the AI SDK.',
+  title: '갤럭시 S25 도우미',
+  description: '갤럭시 S25 사용자를 위한 AI 챗봇 도우미',
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
 };
 
 export const viewport = {
@@ -28,8 +33,8 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
 });
 
-const LIGHT_THEME_COLOR = 'hsl(0 0% 100%)';
-const DARK_THEME_COLOR = 'hsl(240deg 10% 3.92%)';
+const LIGHT_THEME_COLOR = '#1A237E'; // 갤럭시 테마 색상으로 변경
+const DARK_THEME_COLOR = '#1A237E'; // 갤럭시 테마 색상으로 변경
 const THEME_COLOR_SCRIPT = `\
 (function() {
   var html = document.documentElement;
@@ -55,7 +60,7 @@ export default async function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ko"
       // `next-themes` injects an extra classname to the body element to avoid
       // visual flicker before hydration. Hence the `suppressHydrationWarning`
       // prop is necessary to avoid the React hydration mismatch warning.
@@ -69,6 +74,7 @@ export default async function RootLayout({
             __html: THEME_COLOR_SCRIPT,
           }}
         />
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
       </head>
       <body className="antialiased">
         <ThemeProvider
