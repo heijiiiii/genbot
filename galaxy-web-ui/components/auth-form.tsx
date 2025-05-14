@@ -7,12 +7,14 @@ export function AuthForm({
   action,
   children,
   defaultEmail = '',
+  isLogin = false,
 }: {
   action: NonNullable<
     string | ((formData: FormData) => void | Promise<void>) | undefined
   >;
   children: React.ReactNode;
   defaultEmail?: string;
+  isLogin?: boolean;
 }) {
   return (
     <Form action={action} className="flex flex-col gap-4 px-4 sm:px-16">
@@ -21,7 +23,7 @@ export function AuthForm({
           htmlFor="email"
           className="text-zinc-600 font-normal dark:text-zinc-400"
         >
-          Email Address
+          {isLogin ? '이메일' : 'Email Address'}
         </Label>
 
         <Input
@@ -29,7 +31,7 @@ export function AuthForm({
           name="email"
           className="bg-muted text-md md:text-sm"
           type="email"
-          placeholder="user@acme.com"
+          placeholder={isLogin ? "example@email.com" : "user@acme.com"}
           autoComplete="email"
           required
           autoFocus
@@ -42,7 +44,7 @@ export function AuthForm({
           htmlFor="password"
           className="text-zinc-600 font-normal dark:text-zinc-400"
         >
-          Password
+          {isLogin ? '비밀번호' : 'Password'}
         </Label>
 
         <Input
