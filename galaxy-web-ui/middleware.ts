@@ -13,6 +13,11 @@ export async function middleware(request: NextRequest) {
     return new Response('pong', { status: 200 });
   }
 
+  // 로그인 및 회원가입 페이지에서는 추가 처리 없이 진행
+  if (['/login', '/register'].includes(pathname)) {
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith('/api/auth')) {
     return NextResponse.next();
   }
@@ -24,19 +29,13 @@ export async function middleware(request: NextRequest) {
   });
 
   if (!token) {
-    if (['/login', '/register'].includes(pathname)) {
-      return NextResponse.next();
-    }
-    
-    const redirectUrl = encodeURIComponent(request.url);
-
-    return NextResponse.redirect(
-      new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url),
-    );
+    // 토큰이 없는 경우 로그인 페이지로 리디렉션
+    return NextResponse.redirect(new URL('/login', request.url));
   }
 
   const isGuest = guestRegex.test(token?.email ?? '');
 
+  // 로그인한 일반 사용자가 로그인/회원가입 페이지 접근 시 홈으로 리디렉션
   if (token && !isGuest && ['/login', '/register'].includes(pathname)) {
     return NextResponse.redirect(new URL('/', request.url));
   }
