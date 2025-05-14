@@ -216,14 +216,25 @@ async function migrateMessages() {
     for (let j = 0; j < newMessagesToInsert.length; j += INSERT_BATCH_SIZE) {
       const messageBatch = newMessagesToInsert.slice(j, j + INSERT_BATCH_SIZE);
       if (messageBatch.length > 0) {
-        const validMessageBatch = messageBatch.map((msg) => ({
-          id: msg.id,
-          chatId: msg.chatId,
-          parts: msg.parts,
-          role: msg.role,
-          attachments: msg.attachments,
-          createdAt: msg.createdAt,
-        }));
+        const validMessageBatch = messageBatch.map((msg) => {
+          // content 필드를 위한 텍스트 추출
+          let content = '';
+          if (msg.parts && msg.parts.length > 0) {
+            // 텍스트 타입 파트에서 내용 추출
+            const textPart = msg.parts.find(part => part.type === 'text');
+            content = textPart ? textPart.text : '';
+          }
+          
+          return {
+            id: msg.id,
+            chatId: msg.chatId,
+            content: content, // 필수 필드인 content 추가
+            parts: msg.parts,
+            role: msg.role,
+            attachments: msg.attachments,
+            createdAt: msg.createdAt,
+          };
+        });
 
         await db.insert(message).values(validMessageBatch);
       }
