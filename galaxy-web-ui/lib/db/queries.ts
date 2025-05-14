@@ -36,14 +36,23 @@ import { generateHashedPassword } from './utils';
 // https://authjs.dev/reference/adapter/drizzle
 
 // biome-ignore lint: Forbidden non-null assertion.
-const client = postgres(process.env.POSTGRES_URL!);
+const connectionString = process.env.POSTGRES_URL!;
+
+// 데이터베이스 연결 설정
+const client = postgres(connectionString, {
+  ssl: 'require',
+  connect_timeout: 30,
+  idle_timeout: 30,
+  max_lifetime: 60 * 30
+});
+
 const db = drizzle(client);
 
 export async function getUser(email: string): Promise<Array<User>> {
   try {
     return await db.select().from(user).where(eq(user.email, email));
   } catch (error) {
-    console.error('Failed to get user from database');
+    console.error('Failed to get user from database', error);
     throw error;
   }
 }
@@ -54,7 +63,7 @@ export async function createUser(email: string, password: string) {
   try {
     return await db.insert(user).values({ email, password: hashedPassword });
   } catch (error) {
-    console.error('Failed to create user in database');
+    console.error('Failed to create user in database', error);
     throw error;
   }
 }

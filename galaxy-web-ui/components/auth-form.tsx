@@ -23,7 +23,7 @@ export function AuthForm({
           htmlFor="email"
           className="text-zinc-600 font-normal dark:text-zinc-400"
         >
-          {isLogin ? '이메일' : 'Email Address'}
+          이메일
         </Label>
 
         <Input
@@ -44,7 +44,7 @@ export function AuthForm({
           htmlFor="password"
           className="text-zinc-600 font-normal dark:text-zinc-400"
         >
-          {isLogin ? '비밀번호' : 'Password'}
+          비밀번호
         </Label>
 
         <Input
