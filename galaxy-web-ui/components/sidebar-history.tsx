@@ -28,29 +28,36 @@ import { ChatItem } from './sidebar-history-item';
 import useSWRInfinite from 'swr/infinite';
 import { LoaderIcon } from './icons';
 
+// API로부터 오는 실제 데이터 타입을 확장하여 사용
+type ExtendedChat = Chat & {
+  created_at?: string | Date;
+  createdAt?: string | Date;
+};
+
 type GroupedChats = {
-  today: Chat[];
-  yesterday: Chat[];
-  lastWeek: Chat[];
-  lastMonth: Chat[];
-  older: Chat[];
+  today: ExtendedChat[];
+  yesterday: ExtendedChat[];
+  lastWeek: ExtendedChat[];
+  lastMonth: ExtendedChat[];
+  older: ExtendedChat[];
 };
 
 export interface ChatHistory {
-  chats: Array<Chat>;
+  chats: Array<ExtendedChat>;
   hasMore: boolean;
 }
 
 const PAGE_SIZE = 20;
 
-const groupChatsByDate = (chats: Chat[]): GroupedChats => {
+const groupChatsByDate = (chats: ExtendedChat[]): GroupedChats => {
   const now = new Date();
   const oneWeekAgo = subWeeks(now, 1);
   const oneMonthAgo = subMonths(now, 1);
 
   return chats.reduce(
     (groups, chat) => {
-      const chatDate = new Date(chat.createdAt);
+      const dateToUse = chat.created_at || chat.createdAt;
+      const chatDate = new Date(dateToUse);
 
       if (isToday(chatDate)) {
         groups.today.push(chat);
@@ -109,18 +116,23 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     isValidating,
     isLoading,
     mutate,
-  } = useSWRInfinite<ChatHistory>(getChatHistoryPaginationKey, fetcher, {
+  } = useSWRInfinite<ChatHistory>(
+    // 로그인 사용자의 경우에만 API 요청을 수행하고, 비로그인 사용자는 null 반환
+    user ? getChatHistoryPaginationKey : () => null,
+    fetcher,
+    {
     fallbackData: [],
-  });
+      // 캐시 설정 추가: 중복 요청 방지
+      dedupingInterval: 5000, // 5초 동안 중복 요청 방지
+      revalidateOnFocus: false, // 탭 포커스 시 자동 재검증 비활성화
+    }
+  );
 
-  // 최대 3건의 최신 채팅만 표시하도록 제한
-  const MAX_DISPLAYED_CHATS = 3;
-
+  // 모든 채팅 표시하도록 변경
   console.log("채팅 기록 데이터:", paginatedChatHistories ? {
     페이지수: paginatedChatHistories.length,
     전체채팅수: paginatedChatHistories.reduce((total, page) => total + page.chats.length, 0),
     첫페이지_채팅수: paginatedChatHistories[0]?.chats.length || 0,
-    최대표시수: MAX_DISPLAYED_CHATS,
     오류여부: paginatedChatHistories.some(page => page === undefined)
   } : "데이터 없음");
 
@@ -128,7 +140,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     console.log("첫 번째 채팅:", {
       id: paginatedChatHistories[0].chats[0].id,
       title: paginatedChatHistories[0].chats[0].title,
-      createdAt: paginatedChatHistories[0].chats[0].createdAt
+      created_at: paginatedChatHistories[0].chats[0].created_at
     });
   }
 
@@ -150,7 +162,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     });
 
     toast.promise(deletePromise, {
-      loading: 'Deleting chat...',
+      loading: '채팅을 삭제 중입니다...',
       success: () => {
         mutate((chatHistories) => {
           if (chatHistories) {
@@ -161,9 +173,9 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
           }
         });
 
-        return 'Chat deleted successfully';
+        return '채팅이 삭제되었습니다';
       },
-      error: 'Failed to delete chat',
+      error: '채팅 삭제 실패',
     });
 
     setShowDeleteDialog(false);
@@ -177,8 +189,8 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     return (
       <SidebarGroup>
         <SidebarGroupContent>
-          <div className="px-2 text-zinc-500 w-full flex flex-row justify-center items-center text-sm gap-2">
-            Login to save and revisit previous chats!
+          <div className="p-4 text-center text-sm text-gray-500">
+            로그인하여 채팅을 저장하세요.
           </div>
         </SidebarGroupContent>
       </SidebarGroup>
@@ -188,18 +200,15 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   if (isLoading) {
     return (
       <SidebarGroup>
-        <div className="px-2 py-1 text-xs text-galaxy-navy font-medium">
-          Today
-        </div>
         <SidebarGroupContent>
-          <div className="flex flex-col">
+          <div className="flex flex-col p-2 gap-3">
             {[44, 32, 28, 64, 52].map((item) => (
               <div
                 key={item}
-                className="rounded-md h-8 flex gap-2 px-2 items-center"
+                className="rounded-md h-12 flex gap-2 px-2 items-center"
               >
                 <div
-                  className="h-[14px] bg-sidebar-foreground/20 rounded animate-pulse"
+                  className="h-[18px] bg-sidebar-foreground/20 rounded animate-pulse"
                   style={{ width: `${item}%` }}
                 />
               </div>
@@ -213,27 +222,25 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
   if (hasEmptyChatHistory) {
     return (
       <SidebarGroup>
-        <div className="px-2 py-1 text-xs text-galaxy-navy font-medium">
-          Your conversations will appear here once you start chatting!
+        <SidebarGroupContent>
+          <div className="p-4 text-center text-sm text-gray-500">
+            최근 채팅 기록이 표시됩니다.
         </div>
+        </SidebarGroupContent>
       </SidebarGroup>
     );
   }
 
-  // 표시할 채팅 목록 제한 (최대 3개)
+  // 모든 채팅 표시
   const allChats = paginatedChatHistories?.flatMap(page => page.chats) || [];
-  const limitedChats = allChats.slice(0, MAX_DISPLAYED_CHATS);
 
   return (
     <>
       <SidebarGroup>
-        <div className="px-2 py-1 text-xs text-galaxy-navy font-medium">
-          채팅 기록
-        </div>
         <SidebarGroupContent>
           <SidebarMenu>
-            <div className="flex flex-col gap-2">
-              {limitedChats.map((chat) => (
+            <div className="flex flex-col gap-2 mt-1">
+              {allChats.map((chat) => (
                 <ChatItem
                   key={chat.id}
                   chat={chat}
@@ -245,12 +252,6 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                   setOpenMobile={setOpenMobile}
                 />
               ))}
-              
-              {allChats.length > MAX_DISPLAYED_CHATS && (
-                <div className="px-2 py-1 text-xs text-zinc-500 text-center">
-                  최근 {MAX_DISPLAYED_CHATS}건의 채팅만 표시됩니다
-                </div>
-              )}
             </div>
           </SidebarMenu>
         </SidebarGroupContent>

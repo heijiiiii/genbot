@@ -3,7 +3,7 @@ import {
   smoothStream,
   streamText,
 } from 'ai';
-import { generateUUID, } from '@/lib/utils';
+import { generateUUID } from '@/lib/utils';
 import { createClient } from '@supabase/supabase-js';
 import { CohereEmbeddings } from "@langchain/cohere";
 import { Document } from "@langchain/core/documents";
@@ -12,6 +12,7 @@ import { OpenAI } from 'openai';
 import { myProvider } from '@/lib/ai/providers';
 import { isProductionEnvironment, API_BASE_URL } from '@/lib/constants';
 import { getProxyImageUrl, extractImagesFromText, type ImageData } from '@/lib/ai';
+import { auth } from '@/app/(auth)/auth';
 
 // 렌더 백엔드 서버 URL
 const RENDER_BACKEND_URL = 'https://galaxy-rag-chatbot.onrender.com';
@@ -72,11 +73,11 @@ async function getAvailableImages() {
     
     // 이미지 파일만 필터링
     const imageFiles = data
-      .filter(item => !item.id.endsWith('/') && 
+      .filter((item: any) => !item.id.endsWith('/') && 
              (item.name.endsWith('.jpg') || 
               item.name.endsWith('.jpeg') || 
               item.name.endsWith('.png')))
-      .map(item => item.name);
+      .map((item: any) => item.name);
     
     console.log(`Supabase에서 ${imageFiles.length}개 이미지 목록 로드됨`);
     
@@ -241,18 +242,45 @@ async function getOrCreateGuestUser() {
   }
 }
 
-// 채팅 저장
-async function saveChat(userId: string, title: string) {
+// 사용자 ID 가져오기 (인증된 사용자 또는 게스트)
+async function getUserId() {
   try {
+    // 세션에서 사용자 정보 가져오기
+    const session = await auth();
+    
+    if (session?.user?.id) {
+      // 인증된 사용자인 경우 세션 ID 사용
+      console.log('[인증] 세션에서 사용자 ID 가져옴:', session.user.id);
+      return session.user.id;
+    } else {
+      // 인증되지 않은 사용자인 경우 게스트 ID 생성
+      const guestId = await getOrCreateGuestUser();
+      console.log('[게스트] 게스트 사용자 ID 생성:', guestId);
+      return guestId;
+    }
+  } catch (error) {
+    console.error('사용자 ID 가져오기 오류:', error);
+    return getOrCreateGuestUser(); // 오류 발생 시 게스트 ID 사용
+  }
+}
+
+// 채팅 저장
+async function saveChat(userId: string, title: string, customId?: string) {
+  try {
+    // 채팅 ID 결정 (제공된 ID 또는 새 UUID)
+    const chatId = customId || generateUUID();
+    
     const { data: chat, error } = await client
       .from('chats')
-      .insert([{
-        user_id: userId,
-        title: title,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        visibility: 'private'
-      }])
+      .insert([
+        {
+          id: chatId, // 제공된 ID 사용 또는 새 UUID 사용
+          user_id: userId,
+          title: title,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          visibility: 'private'
+        }])
       .select('id')
       .single();
     
@@ -271,12 +299,73 @@ async function saveChat(userId: string, title: string) {
 // 메시지 저장
 async function saveMessage(chatId: string, role: string, content: string) {
   try {
+    // content 형식 로깅 및 검증 강화
+    console.log(`메시지 저장 시도 - 역할: ${role}, 내용 타입: ${typeof content}`);
+    
+    // 객체 또는 배열 형태 검증
+    let safeContent: string;
+    let contentIsJsonStr = false;
+    
+    // JSON 문자열인지 확인 (배열 또는 객체 형태의 문자열)
+    if (typeof content === 'string') {
+      if ((content.startsWith('[') && content.endsWith(']')) || 
+          (content.startsWith('{') && content.endsWith('}'))) {
+        try {
+          // 유효한 JSON인지 파싱해서 확인
+          JSON.parse(content);
+          safeContent = content; // 이미 JSON 문자열이면 그대로 사용
+          contentIsJsonStr = true;
+          console.log('이미 JSON 문자열 형식입니다. 변환 없이 사용합니다.');
+        } catch (e) {
+          // 유효한 JSON이 아니면 일반 문자열로 처리
+          safeContent = content;
+          console.log('JSON 형식처럼 보이지만 파싱 불가능한 일반 문자열입니다.');
+        }
+      } else if (content === '[object Object]') {
+        console.log('경고: [object Object] 문자열이 직접 전달됨');
+        // 이미 문자열화된 [object Object]가 전달된 경우 빈 객체로 대체
+        safeContent = '{}';
+      } else {
+        // 일반 문자열
+        safeContent = content;
+      }
+    } else {
+      // 문자열이 아닌 경우 JSON으로 변환
+      console.log('문자열이 아닌 내용이 전달됨:', content);
+      safeContent = JSON.stringify(content);
+      console.log('문자열로 변환 후:', safeContent);
+    }
+    
+    // parts 필드 구성 - JSON 문자열이면 파싱하여 사용, 아니면 text 타입으로 구성
+    let parts;
+    if (contentIsJsonStr) {
+      try {
+        // 이미 JSON 문자열인 경우, 그대로 파싱하여 사용
+        parts = JSON.parse(safeContent);
+        console.log('기존 JSON parts 구조 사용:', parts);
+      } catch (e) {
+        // 파싱에 실패한 경우 기본 구조 사용
+        parts = [{ type: 'text', text: safeContent }];
+        console.log('JSON 파싱 실패, 기본 parts 구조 사용');
+      }
+    } else {
+      // 일반 문자열인 경우 기본 text 타입으로 구성
+      parts = [{ type: 'text', text: safeContent }];
+    }
+    
+    // 디버그를 위한 최종 데이터 구조 로깅
+    console.log('최종 저장 데이터 구조:');
+    console.log('- content:', typeof safeContent, safeContent.length > 100 ? safeContent.substring(0, 100) + '...' : safeContent);
+    console.log('- parts:', typeof parts, Array.isArray(parts) ? parts.length : 'not array');
+    
     const { data: message, error } = await client
       .from('messages')
       .insert([{
         chat_id: chatId,
         role: role,
-        content: content,
+        content: safeContent,
+        parts: parts,
+        attachments: [],
         created_at: new Date().toISOString()
       }])
       .select('id')
@@ -287,6 +376,7 @@ async function saveMessage(chatId: string, role: string, content: string) {
       return null;
     }
     
+    console.log(`메시지 성공적으로 저장됨 - ID: ${message.id}, 내용 길이: ${safeContent.length}`);
     return message.id;
   } catch (error) {
     console.error('메시지 저장 오류:', error);
@@ -332,12 +422,74 @@ async function getChatById(chatId: string) {
   }
 }
 
+// 세션에서 사용자 정보 가져오기
+async function getUserFromSession() {
+  try {
+    const session = await auth();
+    if (session?.user?.id) {
+      console.log("[인증] 세션에서 사용자 정보 가져옴:", {
+        id: session.user.id,
+        email: session.user.email || "이메일 없음",
+        type: session.user.type || "타입 없음"
+      });
+      return session.user;
+    }
+    return null;
+  } catch (error) {
+    console.error("세션 사용자 정보 가져오기 오류:", error);
+    return null;
+  }
+}
+
+// 채팅 ID와 사용자 ID 간의 매핑 저장 함수
+async function saveChatUserMapping(nextAuthId: string, chatId: string) {
+  try {
+    if (!nextAuthId || !chatId) {
+      console.log('유효하지 않은 매핑 정보:', { nextAuthId, chatId });
+      return;
+    }
+
+    console.log(`채팅 사용자 매핑 저장 시도: ${nextAuthId} -> ${chatId}`);
+
+    // 이미 존재하는지 확인
+    const { data: existingMapping } = await client
+      .from('user_mappings')
+      .select('id')
+      .eq('next_auth_id', nextAuthId)
+      .eq('chat_id', chatId)
+      .single();
+    
+    if (existingMapping) {
+      console.log(`이미 존재하는 매핑 발견: ${nextAuthId} -> ${chatId}`);
+      return;
+    }
+
+    // 새 매핑 저장
+    const { error } = await client
+      .from('user_mappings')
+      .insert({
+        next_auth_id: nextAuthId,
+        supabase_id: nextAuthId, // 세션 ID를 supabaseId로 사용
+        chat_id: chatId,
+        created_at: new Date().toISOString()
+      });
+    
+    if (error) {
+      console.error('매핑 저장 오류:', error);
+    } else {
+      console.log(`매핑 저장 성공: ${nextAuthId} -> ${chatId}`);
+    }
+  } catch (error) {
+    console.error('매핑 저장 중 오류:', error);
+  }
+}
+
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
     const json = await request.json();
-    console.log('받은 요청 본문:', JSON.stringify(json)); // 디버깅 로그 추가
+    console.log('받은 요청 본문:', JSON.stringify(json).substring(0, 500) + '...'); // 디버깅 로그 추가
     
     // 더 유연한 요청 구조 처리
     let query = '';
@@ -371,7 +523,7 @@ export async function POST(request: Request) {
     // 채팅 ID 처리 - UUID 형식 확인 및 변환
     let chatId = json.id || json.chatId;
     
-    // UUID 형식 검증 함수
+    // UUID 형식을 검증하는 함수 추가
     const isValidUUID = (uuid: string): boolean => {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       return uuidRegex.test(uuid);
@@ -388,29 +540,43 @@ export async function POST(request: Request) {
     let newChatId: string | null = null;
     
     try {
-      // 게스트 사용자 가져오기 또는 생성
-      userId = await getOrCreateGuestUser();
+      // 인증된 사용자 또는 게스트 사용자 ID 가져오기
+      userId = await getUserId();
       
       if (userId) {
         if (chatId) {
-          // 기존 채팅 ID가 제공된 경우, 해당 채팅이 존재하는지 확인
+          // 클라이언트가 보낸 채팅 ID를 항상 그대로 사용
+          console.log(`클라이언트가 제공한 채팅 ID ${chatId}를 사용합니다.`);
+          newChatId = chatId;
+          
+          // DB에 존재하지 않아도 새로 생성하지 않음
           const existingChat = await getChatById(chatId);
-          if (existingChat) {
-            newChatId = chatId;
-          } else {
-            // 채팅이 존재하지 않는 경우 새로 생성
-            newChatId = await saveChat(userId, `${query.substring(0, 50)}...`);
+          if (!existingChat) {
+            // 최초 1회만 저장 (DB에 없는 경우)
+            console.log(`최초 저장: 채팅 ID ${chatId}를 DB에 저장합니다.`);
+            await saveChat(userId, `${query.substring(0, 50)}...`, chatId);
           }
         } else {
-          // 새 채팅 생성
+          // 채팅 ID가 없는 경우에만 새로 생성 (최초 접속 시)
+          console.log(`새 채팅 시작: 새 채팅 ID를 생성합니다. 사용자 ID: ${userId}`);
           newChatId = await saveChat(userId, `${query.substring(0, 50)}...`);
         }
         
         if (newChatId) {
+          console.log(`채팅 ID ${newChatId}에 메시지를 저장합니다.`);
           // 사용자 메시지 저장
           const messageId = await saveMessage(newChatId, 'user', query);
           if (!messageId) {
-            console.warn('사용자 메시지 저장 실패');
+            console.warn('사용자 메시지 저장에 실패했습니다.');
+          } else {
+            console.log(`메시지 ID ${messageId}가 성공적으로 저장되었습니다.`);
+          }
+          
+          // 세션에서 사용자 정보를 가져와서 매핑 테이블에 저장
+          const session = await auth();
+          if (session?.user?.id) {
+            console.log(`인증된 사용자 발견: ${session.user.id}, 매핑 저장 시도`);
+            await saveChatUserMapping(session.user.id, newChatId);
           }
         }
       }
@@ -495,18 +661,17 @@ export async function POST(request: Request) {
         // AI에 전달할 메시지 구성 
         const aiMessages = Array.isArray(json.messages) && json.messages.length > 0 
           ? json.messages 
-          : [{ role: 'user', content: query }];
-          
-        // 디버그 모드 설정 - 항상 활성화
+          : [{ role: 'user' as const, content: query }];
+        
+        // 디버그 모드 설정
         const isDebugMode = true;
         console.log('디버그 모드 활성화 여부:', isDebugMode);
-        
-        // streamText 함수 옵션 수정
-        const result = streamText({
+    
+        // 스트림 텍스트 생성 옵션
+        const streamTextOptions = {
           model: myProvider.languageModel('chat-model'),
           system: systemPromptText,
           messages: aiMessages,
-          // 청크 처리 방식 개선 - 이미지 패턴이 분리되지 않도록 큰 단위로 전송
           experimental_transform: smoothStream({
             chunking: /\n\n|\n(?=\[이미지)/,  // 빈 줄 또는 이미지 패턴 시작 부분을 기준으로 분할
             delayInMs: 0  // 딜레이 없이 빠르게 전송
@@ -516,162 +681,43 @@ export async function POST(request: Request) {
             isEnabled: isProductionEnvironment,
             functionId: 'stream-text',
           }
-        });
-
-        // 스트림 처리 시작 로그
-        console.log('스트림 응답 시작됨 - 이미지 URL 포함 여부 확인');
+        };
         
-        // 스트림 소비 및 병합
-        result.consumeStream();
-        await result.mergeIntoDataStream(dataStream);
+        console.log('스트림 응답 시작됨');
         
-        // 응답 로깅
-        console.log('응답 데이터 스트림 병합됨 - 이미지 URL 전송 확인 필요');
+        // 채팅 ID 정보 로깅
+        if (newChatId) {
+          const chatInfo = {
+            chatId: newChatId,
+            originalChatId: chatId,
+            chatIdChanged: newChatId !== chatId
+          };
+          
+          console.log(`새 채팅 ID 생성됨 (헤더에 포함됨): ${JSON.stringify(chatInfo)}`);
+        }
         
-        // OpenAI 직접 호출은 주석 처리하고 Render 백엔드 방식 사용
-        /*
-        // 스트리밍 응답 후에 별도로 직접 API 호출로 응답 확인 (이미지 URL 처리용)
+        // streamText 호출 (간단하게 스트리밍만 처리)
+        const result = streamText(streamTextOptions);
+        
         try {
-          const completion = await openai.chat.completions.create({
-            model: "gpt-4o",
-            messages: [
-              { role: "system", content: systemPromptText },
-              { role: "user", content: query }
-            ],
-          });
+          // 스트림 소비 및 병합 (단순하게 유지)
+          result.consumeStream();
+          await result.mergeIntoDataStream(dataStream);
           
-          const fullContent = completion.choices[0]?.message?.content || '';
-          console.log('직접 API 호출 응답 길이:', fullContent.length);
+          console.log('스트림 처리 완료');
           
-          // 이미지 패턴 확인
-          const hasImagePattern = fullContent.includes('[이미지');
-          const hasSupabaseUrl = fullContent.includes('ywvoksfszaelkceectaa.supabase.co');
-          
-          console.log('응답에 이미지 패턴 포함:', hasImagePattern);
-          console.log('응답에 Supabase URL 포함:', hasSupabaseUrl);
-          
-          // 이미지 메타데이터를 스트림으로 전송하지 않고 프론트엔드에서 처리하도록 함
-          // 프론트엔드에서는 텍스트에서 이미지 패턴을 추출하여 표시
-          
-          // 이미지가 있는 경우 로깅만 수행
-          if (hasImagePattern || hasSupabaseUrl) {
-            console.log('응답에 이미지 패턴이 있음 - 프론트엔드에서 처리 예정');
-            
-            try {
-              const images = extractImagesFromText(fullContent);
-              if (images && images.length > 0) {
-                console.log('이미지 추출 성공 (백엔드):', images.length);
-                
-                // 이미지 정보 메타데이터에 추가
-                await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/chat`, {
-                  method: 'PUT',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    chatId: newChatId,
-                    content: `[시스템 응답: ${new Date().toISOString()}]`,
-                    metadata: { 
-                      isStreamResponse: true,
-                      images: images 
-                    }
-                  }),
-                });
-                
-                console.log('이미지 정보가 포함된 메시지 저장 성공');
-              }
-            } catch (error) {
-              console.error('이미지 추출 중 오류 (백엔드):', error);
-            }
-          }
-          
-          // 메시지 저장은 이미지 없이 텍스트만 저장
-          if (newChatId) {
-            try {
-              // 응답 메시지 저장
-              const messageResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/chat`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  chatId: newChatId,
-                  content: fullContent
-                }),
-              });
-              
-              if (!messageResponse.ok) {
-                console.error('메시지 저장 실패:', await messageResponse.text());
-              } else {
-                console.log('메시지 저장 성공');
-              }
-            } catch (saveError) {
-              console.error('메시지 저장 중 오류:', saveError);
-            }
-          }
-          
+          // 참고: 실제 응답 저장은 프론트엔드에서 최종 렌더링된 응답을 캡처하여 
+          // 별도의 API 호출을 통해 처리하도록 변경
+          // 이 단계에서는 사용자 메시지만 저장하고, 어시스턴트 응답은 프론트엔드에서 전송 예정
         } catch (error) {
-          console.error('직접 API 호출 오류:', error);
+          console.error('응답 처리 오류:', error);
         }
-        */
-
-        // 백엔드에서 이미지 정보 가져오기
-        try {
-          // 백엔드에서 이미지 정보 가져오기 시도
-          const imageInfoResponse = await fetch(`${RENDER_BACKEND_URL}/image-search`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ query }),
-          });
-          
-          if (imageInfoResponse.ok) {
-            const imageData = await imageInfoResponse.json();
-            
-            // 이미지 정보가 있으면 로깅
-            if (imageData && imageData.images && imageData.images.length > 0) {
-              console.log('백엔드에서 이미지 정보 가져옴:', imageData.images.length);
-              
-              // 이미지 정보 메타데이터에 추가
-              await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}/api/chat`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  chatId: newChatId,
-                  content: `[시스템 응답: ${new Date().toISOString()}]`,
-                  metadata: { 
-                    isStreamResponse: true,
-                    images: imageData.images 
-                  }
-                }),
-              });
-              
-              console.log('이미지 정보가 포함된 메시지 저장 성공');
-            } else {
-              console.log('백엔드에서 이미지 정보를 제공하지 않음');
-            }
-          } else {
-            console.error('백엔드 이미지 검색 응답 오류:', await imageInfoResponse.text());
-          }
-        } catch (imageError) {
-          console.error('이미지 정보 가져오기 오류:', imageError);
-          // 이미지 정보 가져오기 실패해도 메인 응답은 계속 진행
-        }
-      },
-      onError: (error) => {
-        console.error('데이터 스트림 오류:', error);
-        return '죄송합니다. 응답 처리 중 오류가 발생했습니다.';
-      },
+      }
     });
-
-    // 채팅 ID를 응답 헤더에 포함
-    if (newChatId) {
-      response.headers.set('X-Chat-ID', newChatId);
-    }
-
+    
+    // 응답 헤더에 채팅 ID 추가
+    response.headers.set('X-Chat-ID', newChatId || chatId || '');
+    
     return response;
   } catch (error) {
     console.error("오류:", error);
@@ -734,7 +780,7 @@ export async function DELETE(request: Request) {
   }
 }
 
-// AI 응답 메시지 저장을 위한 추가 API 엔드포인트
+// AI 응답 메시지 저장을 위한 추가 API 엔드포인트 - 프론트엔드에서 캡처한 응답 저장용
 export async function PUT(request: Request) {
   try {
     const json = await request.json();
@@ -744,22 +790,94 @@ export async function PUT(request: Request) {
       return new Response('채팅 ID와 메시지 내용은 필수입니다.', { status: 400 });
     }
     
-    // 기본 메시지 데이터
-    const messageData: any = {
-      chat_id: chatId,
-      role: 'assistant',
-      content: content,
-      created_at: new Date().toISOString()
-    };
+    console.log('프론트엔드에서 캡처한 응답 저장 요청 받음:', {
+      chatId,
+      contentLength: content.length
+    });
     
-    // 메타데이터가 있으면 추가
-    if (metadata) {
-      if (metadata.images) {
-        messageData.metadata = { images: metadata.images };
+    // 채팅 ID가 존재하는지 확인
+    const existingChat = await getChatById(chatId);
+    
+    // 채팅이 존재하지 않으면 DB에 저장만 하고 ID는 변경하지 않음
+    if (!existingChat) {
+      console.log(`채팅 ID ${chatId}가 존재하지 않습니다. 동일한 ID로 DB에 저장합니다.`);
+      
+      // 인증된 사용자 ID 가져오기
+      const userId = await getUserId();
+      
+      if (userId) {
+        // DB에 저장 (ID 변경 없음)
+        const title = content.substring(0, 50) + '...'; // 내용의 일부를 제목으로 사용
+        await saveChat(userId, title, chatId); // chatId를 그대로 사용하기 위해 ID 직접 전달
+        
+        console.log(`채팅을 DB에 저장했습니다. ID: ${chatId} (변경 없음)`);
+        
+        // 세션에서 사용자 정보를 가져와서 매핑 테이블에 저장
+        const session = await auth();
+        if (session?.user?.id) {
+          console.log(`인증된 사용자 발견: ${session.user.id}, 새 채팅과 매핑 저장`);
+          await saveChatUserMapping(session.user.id, chatId);
+        }
+      } else {
+        console.error('사용자 ID를 찾을 수 없어 새 채팅을 생성할 수 없습니다.');
+        return new Response('인증된 사용자를 찾을 수 없습니다.', { status: 403 });
       }
     }
     
-    // 메시지 저장 (메타데이터 포함)
+    // content가 문자열인지 확인 (안전 처리)
+    const safeContent = typeof content === 'string' ? content : JSON.stringify(content);
+    
+    // parts 필드 구성 - 안전한 문자열 사용
+    const parts = [{ 
+      type: 'text', 
+      text: safeContent 
+    }];
+    
+    // 이미지 추출 시도
+    let extractedImages: any[] = [];
+    try {
+      extractedImages = extractImagesFromText(safeContent);
+      console.log('프론트엔드 응답에서 이미지 추출:', extractedImages.length);
+    } catch (imageError) {
+      console.error('이미지 추출 오류:', imageError);
+    }
+    
+    // 기본 메시지 데이터
+    const messageData: any = {
+      chat_id: chatId, // 항상 원래 채팅 ID 사용
+      role: 'assistant',
+      content: safeContent,
+      parts: parts,
+      created_at: new Date().toISOString()
+    };
+    
+    // 추출된 이미지가 있으면 첨부
+    if (extractedImages.length > 0) {
+      messageData.attachments = extractedImages;
+    } 
+    // 별도로 전달된 메타데이터가 있으면 추가
+    else if (metadata?.images && Array.isArray(metadata.images) && metadata.images.length > 0) {
+      console.log(`이미지 메타데이터 ${metadata.images.length}개 처리 중`);
+      
+      try {
+        // 이미지 정보를 안전하게 저장
+        messageData.metadata = { 
+          images: metadata.images,
+          isStreamResponse: true
+        };
+        messageData.attachments = metadata.images;
+        
+        console.log('이미지 정보 저장 완료:', messageData.attachments.length);
+      } catch (imgError) {
+        console.error('이미지 정보 처리 오류:', imgError);
+        messageData.attachments = [];
+      }
+    } else {
+      console.log('이미지 없음, 빈 attachments 설정');
+      messageData.attachments = [];
+    }
+    
+    // 메시지 저장
     const { data: message, error } = await client
       .from('messages')
       .insert([messageData])
@@ -767,16 +885,21 @@ export async function PUT(request: Request) {
       .single();
     
     if (error) {
-      console.error('메시지 저장 오류:', error);
+      console.error('프론트엔드 캡처 메시지 저장 오류:', error);
       return new Response('메시지 저장 중 오류가 발생했습니다.', { status: 500 });
     }
     
-    // 성공 응답에 이미지 정보도 포함
+    console.log('프론트엔드 캡처 메시지 저장 성공 - ID:', message.id);
+    
+    // 성공 응답에 이미지 정보와 최종 사용된 채팅 ID도 포함
     return Response.json({ 
       success: true, 
       messageId: message.id,
-      hasImages: !!(metadata && metadata.images && metadata.images.length > 0),
-      imageCount: metadata?.images?.length || 0
+      chatId: chatId, // 최종 사용된 채팅 ID 반환
+      originalChatId: chatId, // 원래 요청된 채팅 ID
+      chatIdChanged: false, // 채팅 ID가 변경되었는지 여부
+      hasImages: extractedImages.length > 0 || !!(metadata && metadata.images && metadata.images.length > 0),
+      imageCount: extractedImages.length || metadata?.images?.length || 0
     });
   } catch (error) {
     console.error('AI 응답 저장 오류:', error);

@@ -39,16 +39,22 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   });
 
   function convertToUIMessages(messages: Array<DBMessage>): Array<UIMessage> {
-    return messages.map((message) => ({
-      id: message.id,
-      parts: message.parts as UIMessage['parts'],
-      role: message.role as UIMessage['role'],
-      // Note: content will soon be deprecated in @ai-sdk/react
-      content: '',
-      createdAt: message.createdAt,
-      experimental_attachments:
-        (message.attachments as Array<Attachment>) ?? [],
-    }));
+    return messages.map((message) => {
+      // parts 값이 null이거나 비어있는 경우 content 값으로 parts 생성
+      const messageParts = message.parts 
+        ? (message.parts as UIMessage['parts']) 
+        : [{ type: 'text' as const, text: message.content }];
+      
+      return {
+        id: message.id,
+        parts: messageParts,
+        role: message.role as UIMessage['role'],
+        content: message.content,
+        createdAt: message.createdAt,
+        experimental_attachments:
+          (message.attachments as Array<Attachment>) ?? [],
+      };
+    });
   }
 
   const cookieStore = await cookies();

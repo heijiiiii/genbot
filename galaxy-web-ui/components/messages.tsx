@@ -46,6 +46,11 @@ function PureMessages({
         const messageContent = lastMessage.props?.message?.content;
         
         if (messageContent) {
+          // [object Object] 문자열 감지 - 잘못된 문자열화
+          if (messageContent === '[object Object]') {
+            console.error('❌ 오류 감지: 메시지 내용이 [object Object]입니다. 객체가 문자열로 제대로 변환되지 않았습니다.');
+          }
+          
           // 이미지 패턴 확인
           const textLength = messageContent.length;
           console.log('텍스트 길이:', textLength);
@@ -73,7 +78,29 @@ function PureMessages({
     >
       {messages.length === 0 && <Greeting />}
 
-      {messages.map((message, index) => (
+      {messages.map((message, index) => {
+        // 현재 대화의 활성 여부 확인
+        // 1. 마지막 메시지는 항상 현재 활성 대화로 간주
+        // 2. 스트리밍 중인 메시지도 활성 대화로 간주
+        // boolean 타입 명시적 비교로 변경
+        const isActive = 
+          index === messages.length - 1 || // 마지막 메시지
+          (status === 'streaming' && index === messages.length - 2 && message.role === 'user'); // 스트리밍 중인 응답의 사용자 메시지
+        
+        // 명시적으로 boolean 타입으로 변환
+        const isActiveBoolean = isActive === true;
+        
+        // 디버깅을 위한 로그 추가
+        if (message.role === 'assistant') {
+          console.log(`메시지 ${index + 1}/${messages.length}, ID: ${message.id}, 활성 상태: ${isActiveBoolean ? '활성(true)' : '비활성(false)'}`);
+          
+          // 첨부 파일 있는 경우 로깅
+          if (message.experimental_attachments && message.experimental_attachments.length > 0) {
+            console.log(`  - 첨부 파일 ${message.experimental_attachments.length}개, 표시여부: ${isActiveBoolean ? '표시' : '숨김'}`);
+          }
+        }
+        
+        return (
         <PreviewMessage
           key={message.id}
           chatId={chatId}
@@ -87,8 +114,11 @@ function PureMessages({
           setMessages={setMessages}
           reload={reload}
           isReadonly={isReadonly}
+          messageIndex={index}
+            isActive={isActiveBoolean} // 현재 활성 대화 여부 전달
         />
-      ))}
+        );
+      })}
 
       {status === 'submitted' &&
         messages.length > 0 &&

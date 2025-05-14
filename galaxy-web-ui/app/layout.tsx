@@ -84,7 +84,13 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <Toaster position="top-center" />
-          <SessionProvider>{children}</SessionProvider>
+          <SessionProvider 
+            refetchInterval={0} 
+            refetchOnWindowFocus={false} 
+            refetchWhenOffline={false}
+          >
+            {children}
+          </SessionProvider>
         </ThemeProvider>
       </body>
     </html>

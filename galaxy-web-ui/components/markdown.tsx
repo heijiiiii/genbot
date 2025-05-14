@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import React, { memo, useMemo, useEffect, useState } from 'react';
+import React, { memo, useMemo, useEffect, useState, ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './code-block';
@@ -205,6 +205,50 @@ const components: Partial<Components> = {
   // @ts-expect-error
   code: CodeBlock,
   pre: ({ children }) => <>{children}</>,
+  // p 태그 렌더러 커스터마이징: 이미지를 포함하는 경우 div로 렌더링
+  p: ({ node, children, ...props }) => {
+    // p 태그 내용을 확인하여 이미지 태그가 포함되어 있는지 검사
+    const childrenArray = React.Children.toArray(children);
+    
+    // img 태그 또는 이미지를 포함하는 링크가 있는지 확인
+    const hasImageChild = childrenArray.some(child => {
+      // 직접적인 이미지 태그 확인
+      if (React.isValidElement(child) && (
+        child.type === 'img' || 
+        (typeof child.type === 'function' && (child.type as any).name === 'img')
+      )) {
+        return true;
+      }
+      
+      // a 태그 안에 이미지가 있는지 확인
+      if (React.isValidElement(child) && (
+        child.type === 'a' || 
+        (typeof child.type === 'function' && (child.type as any).name === 'a')
+      )) {
+        const linkChildren = React.Children.toArray((child as React.ReactElement).props.children);
+        return linkChildren.some(linkChild => 
+          React.isValidElement(linkChild) && (
+            linkChild.type === 'img' || 
+            (typeof linkChild.type === 'function' && (linkChild.type as any).name === 'img')
+          )
+        );
+      }
+      
+      return false;
+    });
+    
+    // 이미지가 포함된 경우 div로 렌더링
+    if (hasImageChild) {
+      return (
+        <div className="my-4" {...props}>
+          {children}
+        </div>
+      );
+    }
+    
+    // 일반 텍스트의 경우 p 태그로 렌더링
+    return <p className="mb-4 leading-7" {...props}>{children}</p>;
+  },
   ol: ({ node, children, ...props }) => {
     // ordered 속성이 불리언이면 해당 속성을 삭제
     const safeProps: any = { ...props };
@@ -335,46 +379,64 @@ const components: Partial<Components> = {
         console.log('이미지 대체 텍스트:', alt);
       }
       
+      // 주의: 여기서는 이미지만 반환하고, 부모 컴포넌트가 이를 적절히 감싸도록 함
       return (
-        <div className="my-4 flex flex-col items-center border border-gray-200 rounded-lg p-2 bg-gray-50 dark:bg-gray-900 dark:border-gray-800">
-          <a href={src} target="_blank" rel="noreferrer" className="max-w-full">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img 
-              src={src} 
-              alt={alt || "이미지"} 
-              className="rounded-lg max-w-full h-auto max-h-[400px] object-contain hover:opacity-90 transition-opacity shadow-md"
-              loading="lazy"
-              onLoad={(e) => {
-                if (DEBUG_IMAGE_PROCESSING) {
-                  console.log('이미지 로드 성공:', src);
-                }
-              }}
-              onError={(e) => {
-                // 이미지 로드 실패 시 fallback 이미지 표시 또는 스타일 변경
-                const target = e.target as HTMLImageElement;
-                console.error('이미지 로드 실패:', src);
-                
-                // 이중 슬래시 수정 시도
-                if (src.includes('//')) {
-                  const fixedSrc = src.replace(/([^:])\/\/+/g, '$1/');
-                  console.log('이중 슬래시 수정 시도:', fixedSrc);
-                  target.src = fixedSrc;
-                  return;
-                }
-                
-                target.style.display = isImageFile ? 'block' : 'none';
-                target.style.opacity = '0.5';
-                target.alt = '이미지를 로드할 수 없습니다';
-              }}
-              {...props}
-            />
-          </a>
-          {alt && <p className="text-sm text-muted-foreground mt-1 text-center">{alt}</p>}
-        </div>
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img 
+            src={src} 
+            alt={alt || "이미지"} 
+            className="rounded-lg max-w-full h-auto max-h-[400px] object-contain hover:opacity-90 transition-opacity shadow-md"
+            loading="lazy"
+            onLoad={(e) => {
+              if (DEBUG_IMAGE_PROCESSING) {
+                console.log('이미지 로드 성공:', src);
+              }
+            }}
+            onError={(e) => {
+              // 이미지 로드 실패 시 fallback 이미지 표시 또는 스타일 변경
+              const target = e.target as HTMLImageElement;
+              console.error('이미지 로드 실패:', src);
+              
+              // 이중 슬래시 수정 시도
+              if (src.includes('//')) {
+                const fixedSrc = src.replace(/([^:])\/\/+/g, '$1/');
+                console.log('이중 슬래시 수정 시도:', fixedSrc);
+                target.src = fixedSrc;
+                return;
+              }
+              
+              target.style.display = isImageFile ? 'block' : 'none';
+              target.style.opacity = '0.5';
+              target.alt = '이미지를 로드할 수 없습니다';
+            }}
+            {...props}
+          />
+          {alt && <div className="text-sm text-muted-foreground mt-1 text-center">{alt}</div>}
+        </>
       );
     }
     return null;
-  }
+  },
+  // 이미지 렌더링을 정확히 처리하기 위한 특별한 래퍼 컴포넌트 추가
+  imageWrapper: ({ node, children, ...props }: { node: any; children: ReactNode; [key: string]: any }) => {
+    // 이미지가 있는지 확인
+    const hasImage = React.Children.toArray(children).some(
+      child => React.isValidElement(child) && (child.type === 'img' || (typeof child.type === 'function' && (child.type as any).name === 'img'))
+    );
+
+    if (hasImage) {
+      return (
+        <div className="my-4 flex flex-col items-center border border-gray-200 rounded-lg p-2 bg-gray-50 dark:bg-gray-900 dark:border-gray-800">
+          <a href={node?.properties?.src as string} target="_blank" rel="noreferrer" className="max-w-full">
+            {children}
+          </a>
+        </div>
+      );
+    }
+    
+    return <>{children}</>;
+  },
 };
 
 const remarkPlugins = [remarkGfm];
@@ -603,6 +665,12 @@ const NonMemoizedMarkdown = ({ children }: { children: string }) => {
     
     // 원본 텍스트 저장
     let content = bufferedText;
+    
+    // 짧은 단일 문장은 줄바꿈을 제거하여 단일 줄로 표시
+    if (content.length < 100 && !content.includes("\n") && !content.includes("[이미지") && !content.includes("https://")) {
+      // 짧은 텍스트는 추가 처리 없이 반환
+      return content;
+    }
     
     if (DEBUG_IMAGE_PROCESSING) {
       console.log('처리 전 텍스트 (일부):', `${content.substring(0, 200)}...`);

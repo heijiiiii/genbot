@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 interface ChatImageProps {
   image: ImageData;
+  onImageLoaded?: () => void;
 }
 
 // 디버깅 상수
@@ -88,7 +89,7 @@ function getProxiedImageUrl(url: string): string {
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000; // 1초
 
-export function ChatImage({ image }: ChatImageProps) {
+export function ChatImage({ image, onImageLoaded }: ChatImageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -157,6 +158,7 @@ export function ChatImage({ image }: ChatImageProps) {
     if (DEBUG_IMAGE_LOADING) {
       console.log(`이미지 로드 성공 (${loadingStrategy}):`, currentUrl);
     }
+    onImageLoaded?.();
   };
   
   // 이미지 로드 실패 처리
@@ -276,7 +278,38 @@ export function ChatImage({ image }: ChatImageProps) {
 }
 
 export function ChatImageGallery({ images }: { images: ImageData[] }) {
-  // 이미지가 없는 경우 처리 (early return 전에 useEffect 호출)
+  const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
+  const [allImagesLoaded, setAllImagesLoaded] = useState(false);
+  
+  // 이미지 로드 완료 시 트래킹
+  const handleImageLoaded = useCallback((imageUrl: string) => {
+    setLoadedImages(prev => ({
+      ...prev,
+      [imageUrl]: true
+    }));
+  }, []);
+  
+  // 모든 이미지가 로드되었는지 체크
+  useEffect(() => {
+    if (!images || images.length === 0) return;
+    
+    const allLoaded = images.every(img => loadedImages[img.url]);
+    
+    if (allLoaded && !allImagesLoaded) {
+      if (DEBUG_IMAGE_LOADING) {
+        console.log('모든 이미지 로드 완료!');
+      }
+      setAllImagesLoaded(true);
+      
+      // 이미지 로드 완료 이벤트 발생 (스크롤 관련 컴포넌트에서 캐치할 수 있음)
+      const event = new CustomEvent('galaxy:images-loaded', { 
+        detail: { messageImages: images }
+      });
+      window.dispatchEvent(event);
+    }
+  }, [images, loadedImages, allImagesLoaded]);
+
+  // 디버깅을 위한 마운트 로그
   useEffect(() => {
     if (DEBUG_IMAGE_LOADING) {
       console.log('ChatImageGallery 컴포넌트 마운트됨', {
@@ -284,6 +317,12 @@ export function ChatImageGallery({ images }: { images: ImageData[] }) {
         images: images || []
       });
     }
+    
+    // 언마운트 시 이미지 로드 상태 리셋
+    return () => {
+      setLoadedImages({});
+      setAllImagesLoaded(false);
+    };
   }, [images]);
 
   // 이미지가 없는 경우 early return
@@ -293,7 +332,11 @@ export function ChatImageGallery({ images }: { images: ImageData[] }) {
     <div className="flex flex-col gap-4 mt-4 w-full">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {images.map((image, index) => (
-          <ChatImage key={`${image.url}-${index}`} image={image} />
+          <ChatImage 
+            key={`${image.url}-${index}`} 
+            image={image} 
+            onImageLoaded={() => handleImageLoaded(image.url)}
+          />
         ))}
       </div>
     </div>

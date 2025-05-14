@@ -16,7 +16,7 @@ import {
 import { toast } from 'sonner';
 import { useLocalStorage, useWindowSize } from 'usehooks-ts';
 
-import { ArrowUpIcon, PaperclipIcon, StopIcon } from './icons';
+import { ArrowUpIcon, StopIcon } from './icons';
 import { PreviewAttachment } from './preview-attachment';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -101,14 +101,18 @@ function PureMultimodalInput({
     adjustHeight();
   };
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadQueue, setUploadQueue] = useState<Array<string>>([]);
 
   const submitForm = useCallback(() => {
-    window.history.replaceState({}, '', `/chat/${chatId}`);
+    // 입력값에 불필요한 공백과 줄바꿈 제거 (양쪽 끝 및 중복 공백/줄바꿈)
+    const trimmedInput = input.trim().replace(/\s+/g, ' ');
 
+    // 정리된 입력값으로 메시지 전송
     handleSubmit(undefined, {
       experimental_attachments: attachments,
+      data: {
+        content: trimmedInput // 정리된 입력값 사용
+      }
     });
 
     setAttachments([]);
@@ -125,6 +129,7 @@ function PureMultimodalInput({
     setLocalStorageInput,
     width,
     chatId,
+    input // input 의존성 추가
   ]);
 
   // 전역 접근을 위한 함수 추가
@@ -155,92 +160,8 @@ function PureMultimodalInput({
     };
   }, [submitForm, setInput]);
 
-  const uploadFile = async (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const response = await fetch('/api/files/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const { url, pathname, contentType } = data;
-
-        return {
-          url,
-          name: pathname,
-          contentType: contentType,
-        };
-      }
-      const { error } = await response.json();
-      toast.error(error);
-    } catch (error) {
-      toast.error('Failed to upload file, please try again!');
-    }
-  };
-
-  const handleFileChange = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.target.files || []);
-
-      setUploadQueue(files.map((file) => file.name));
-
-      try {
-        const uploadPromises = files.map((file) => uploadFile(file));
-        const uploadedAttachments = await Promise.all(uploadPromises);
-        const successfullyUploadedAttachments = uploadedAttachments.filter(
-          (attachment) => attachment !== undefined,
-        );
-
-        setAttachments((currentAttachments) => [
-          ...currentAttachments,
-          ...successfullyUploadedAttachments,
-        ]);
-      } catch (error) {
-        console.error('Error uploading files!', error);
-      } finally {
-        setUploadQueue([]);
-      }
-    },
-    [setAttachments],
-  );
-
   return (
     <div className="relative w-full flex flex-col gap-4">
-      <input
-        type="file"
-        className="fixed -top-4 -left-4 size-0.5 opacity-0 pointer-events-none"
-        ref={fileInputRef}
-        multiple
-        onChange={handleFileChange}
-        tabIndex={-1}
-      />
-
-      {(attachments.length > 0 || uploadQueue.length > 0) && (
-        <div
-          data-testid="attachments-preview"
-          className="flex flex-row gap-2 overflow-x-scroll items-end"
-        >
-          {attachments.map((attachment) => (
-            <PreviewAttachment key={attachment.url} attachment={attachment} />
-          ))}
-          {uploadQueue.map((file, index) => (
-            <div
-              key={`${file}-${index}`}
-              className="flex flex-col gap-1 items-center p-4 border rounded-xl border-dashed max-w-36 min-w-20 animate-pulse-slow"
-            >
-              <div className="bg-gray-200 rounded-md h-4 w-12 mb-1"></div>
-              <div className="text-xs text-muted-foreground truncate max-w-full">
-                {file.length > 15 ? `${file.slice(0, 15)}...` : file}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -276,10 +197,6 @@ function PureMultimodalInput({
         </div>
 
         <div className="absolute flex gap-1.5 items-center right-2 bottom-2.5">
-          <PureAttachmentsButton
-            fileInputRef={fileInputRef}
-            status={status}
-          />
           {status === 'streaming' ? (
             <PureStopButton stop={stop} setMessages={setMessages} />
           ) : (
@@ -302,45 +219,13 @@ function PureMultimodalInput({
   );
 }
 
-export const MultimodalInput = memo(PureMultimodalInput, (prev, next) => {
-  return (
-    prev.input === next.input &&
-    prev.status === next.status &&
-    equal(prev.attachments, next.attachments) &&
-    prev.messages.length === next.messages.length &&
-    (prev.messages.length === 0 ||
-      prev.messages[prev.messages.length - 1].id ===
-        next.messages[next.messages.length - 1].id)
-  );
+export const MultimodalInput = memo(PureMultimodalInput, (prevProps, nextProps) => {
+  if (prevProps.status !== nextProps.status) return false;
+  if (prevProps.input !== nextProps.input) return false;
+  if (!equal(prevProps.attachments, nextProps.attachments)) return false;
+  if (!equal(prevProps.messages, nextProps.messages)) return false;
+  return true;
 });
-
-function PureAttachmentsButton({
-  fileInputRef,
-  status,
-}: {
-  fileInputRef: React.MutableRefObject<HTMLInputElement | null>;
-  status: UseChatHelpers['status'];
-}) {
-  return (
-    <Button
-      type="button"
-      size="icon"
-      variant="ghost"
-      className="size-8 text-muted-foreground hover:text-foreground hover:bg-galaxy-light/50 transition-all duration-200 rounded-full"
-      onClick={() => fileInputRef.current?.click()}
-      disabled={status === 'streaming' || status === 'submitted'}
-      data-testid="attachments-button"
-    >
-      <PaperclipIcon />
-      <span className="sr-only">Add attachment</span>
-    </Button>
-  );
-}
-
-const AttachmentsButton = memo(
-  PureAttachmentsButton,
-  (prev, next) => prev.status === next.status,
-);
 
 function PureStopButton({
   stop,

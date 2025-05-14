@@ -20,10 +20,10 @@
    - 관련 이미지 추천 및 표시
    - 텍스트-이미지 관련성 분석
 
-4. **다양한 프론트엔드 구현**
-   - Next.js 웹 애플리케이션
-   - Streamlit 인터페이스
+4. **Next.js 프론트엔드 구현**
+   - 반응형 웹 디자인
    - 모바일 대응 UI
+   - 멀티모달 입력 지원
 
 5. **GPT 모델 변경 지원**
    - GPT-4o
@@ -37,32 +37,9 @@
 
 ## 배포 구성
 
-프로젝트는 두 가지 독립적인 배포 구성으로 운영됩니다:
+프로젝트는 Render와 Next.js를 활용한 배포 구성으로 운영됩니다:
 
-### 1. Railway + Streamlit 구성
-
-```
-+------------------+     +------------------+     +----------------+
-|                  |     |                  |     |                |
-|  Streamlit UI    +---->+  FastAPI (Railway)+---->  LangGraph     |
-|  (사용자 인터페이스) |     |  (백엔드 API)     |     |  (대화 관리)    |
-|                  |     |                  |     |                |
-+------------------+     +------------------+     +----------------+
-                               |                        |
-                         +----------------+     +----------------+
-                         |                |     |                |
-                         |  Supabase      |     |  OpenAI API    |
-                         |  (벡터 DB)     |     |  (GPT 모델)    |
-                         |                |     |                |
-                         +----------------+     +----------------+
-```
-
-이 구성에서는:
-- FastAPI 백엔드가 Railway에 배포되어 실행됩니다
-- Streamlit 인터페이스에서 Railway 백엔드에 API 요청을 보냅니다
-- 사용자는 Streamlit 웹 인터페이스를 통해 챗봇과 상호작용합니다
-
-### 2. Render + Next.js 구성
+### Render + Next.js 구성
 
 ```
 +------------------+     +------------------+     +----------------+
@@ -87,19 +64,13 @@
 
 ## 배포 방식
 
-### 1. Railway 배포 (FastAPI + Streamlit)
-   - FastAPI 백엔드를 Railway에 배포
-   - Streamlit 인터페이스를 통해 사용자에게 서비스 제공
-   - 장점: 간편한 배포, 자동 스케일링, 환경 변수 관리 용이
-   - 주로 빠른 프로토타이핑 및 내부 테스트용으로 활용
-
-### 2. Render 배포 (Next.js + FastAPI)
+### Render 배포 (Next.js + FastAPI)
    - Next.js 프론트엔드를 Render에 배포
    - FastAPI 백엔드도 별도로 Render에 배포
    - 장점: 안정적인 프로덕션 환경, 자동 CI/CD 파이프라인
    - 주로 최종 사용자 서비스용으로 활용
 
-### 3. Docker 컨테이너화
+### Docker 컨테이너화
    - 로컬 개발 환경 일관성
    - 멀티 스테이지 빌드
    - 모든 배포 환경에서 일관성 보장
@@ -109,7 +80,6 @@
 1. **백엔드 (Python)**
    - `galaxy_chatbot.py`: LangGraph 기반 챗봇 코어 로직
    - `app.py`: FastAPI 기반 API 서버
-   - `streamlit_app.py`: Streamlit 웹 인터페이스
 
 2. **프론트엔드 (Next.js)**
    - `galaxy-web-ui/`: Next.js 웹 애플리케이션
@@ -143,6 +113,7 @@
    - 이미지 표시 및 연동 강화
    - 사용자 경험 최적화
    - 샘플 질문 관리
+   - 메시지 편집 기능 제거로 UI 안정성 향상
 
 ## 환경 변수 설정
 
@@ -189,9 +160,6 @@ pip install -r requirements.txt
 
 # FastAPI 서버 실행
 python app.py
-
-# 또는 Streamlit 인터페이스 실행
-streamlit run streamlit_app.py
 ```
 
 ### 프론트엔드
@@ -214,23 +182,10 @@ npm run dev
 docker build -t galaxy-chatbot .
 
 # Docker 컨테이너 실행
-docker run -p 8000:8000 -p 8501:8501 galaxy-chatbot
+docker run -p 8000:8000 galaxy-chatbot
 ```
 
 ## 배포
-
-### Railway 배포 (FastAPI + Streamlit)
-
-```bash
-# Railway CLI 로그인
-railway login
-
-# 프로젝트 연결
-railway link
-
-# 배포
-railway up
-```
 
 ### Render 배포 (Next.js + FastAPI)
 
@@ -253,8 +208,7 @@ railway up
 - **백엔드**: Python, FastAPI, LangGraph, OpenAI API, Cohere API
 - **프론트엔드**: Next.js, React, TypeScript
 - **데이터베이스**: Supabase
-- **배포**: Railway, Render, Docker
-- **기타**: Streamlit
+- **배포**: Render, Docker
 
 ## 프로젝트 구조
 
@@ -262,13 +216,10 @@ railway up
 galaxy-rag-chatbot/
 ├── app.py                  # FastAPI 서버
 ├── galaxy_chatbot.py       # 챗봇 코어 로직
-├── streamlit_app.py        # Streamlit 인터페이스
 ├── requirements.txt        # Python 의존성
 ├── Dockerfile              # Docker 설정
 ├── docker-compose.yml      # Docker Compose 설정
 ├── render.yaml             # Render 배포 설정
-├── railway.toml            # Railway 배포 설정
-├── deploy-railway.sh       # Railway 배포 스크립트
 ├── galaxy-web-ui/          # Next.js 애플리케이션
 │   ├── components/         # UI 컴포넌트
 │   ├── app/                # 페이지 및 라우팅

@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { memo, useState, useEffect, useRef } from 'react';
 import type { Vote } from '@/lib/db/schema';
 import { DocumentToolCall, DocumentToolResult } from './document';
-import { PencilEditIcon, SparklesIcon } from './icons';
+import { SparklesIcon } from './icons';
 import { Markdown } from './markdown';
 import { MessageActions } from './message-actions';
 import { PreviewAttachment } from './preview-attachment';
@@ -15,7 +15,6 @@ import equal from 'fast-deep-equal';
 import { cn } from '@/lib/utils';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
-import { MessageEditor } from './message-editor';
 import { DocumentPreview } from './document-preview';
 import { MessageReasoning } from './message-reasoning';
 import type { UseChatHelpers } from '@ai-sdk/react';
@@ -181,6 +180,8 @@ const PurePreviewMessage = ({
   setMessages,
   reload,
   isReadonly,
+  messageIndex,
+  isActive = false,
 }: {
   chatId: string;
   message: MessageWithImages;
@@ -189,8 +190,10 @@ const PurePreviewMessage = ({
   setMessages: UseChatHelpers['setMessages'];
   reload: UseChatHelpers['reload'];
   isReadonly: boolean;
+  messageIndex?: number;
+  isActive?: boolean;
 }) => {
-  const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const messageRef = useRef<HTMLDivElement>(null);
   
   // 디버깅을 위한 로그
   useEffect(() => {
@@ -198,6 +201,14 @@ const PurePreviewMessage = ({
       console.log('메시지 디버깅 - ID:', message.id);
       console.log('메시지 역할:', message.role);
       console.log('내용 길이:', message.content?.length || 0);
+      console.log('활성 대화 여부:', isActive);
+      
+      // [object Object] 오류 감지
+      if (message.content === '[object Object]') {
+        console.error('❌ 오류 감지: 메시지 내용이 [object Object]입니다!');
+        console.error('이 오류는 객체가 문자열로 제대로 변환되지 않아 발생합니다.');
+        console.error('메시지 구조:', message);
+      }
       
       // 이미지 정보 로깅
       if (message.images && message.images.length > 0) {
@@ -209,7 +220,7 @@ const PurePreviewMessage = ({
         console.log('메시지에 이미지 배열 없음');
       }
     }
-  }, [message]);
+  }, [message, isActive]);
 
   return (
     <AnimatePresence>
@@ -219,13 +230,14 @@ const PurePreviewMessage = ({
         initial={{ y: 5, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         data-role={message.role}
+        ref={messageRef}
       >
         <div
           className={cn(
             'flex gap-4 w-full group-data-[role=user]/message:ml-auto group-data-[role=user]/message:max-w-2xl',
             {
-              'w-full': mode === 'edit',
-              'group-data-[role=user]/message:w-fit': mode !== 'edit',
+              'w-full': false,
+              'group-data-[role=user]/message:w-fit': true,
             },
           )}
         >
@@ -238,21 +250,6 @@ const PurePreviewMessage = ({
           )}
 
           <div className="flex flex-col gap-4 w-full">
-            {message.experimental_attachments &&
-              message.experimental_attachments.length > 0 && (
-                <div
-                  data-testid={`message-attachments`}
-                  className="flex flex-col gap-4 w-full"
-                >
-                  {message.experimental_attachments.map((attachment) => (
-                    <PreviewAttachment
-                      key={attachment.url}
-                      attachment={attachment}
-                    />
-                  ))}
-                </div>
-              )}
-
             {message.parts?.map((part, index) => {
               const { type } = part;
               const key = `message-${message.id}-part-${index}`;
@@ -268,57 +265,25 @@ const PurePreviewMessage = ({
               }
 
               if (type === 'text') {
-                if (mode === 'view') {
-                  return (
-                    <div key={key} className="flex flex-row gap-2 items-start">
-                      {message.role === 'user' && !isReadonly && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              data-testid="message-edit-button"
-                              variant="ghost"
-                              className="px-2 h-fit rounded-full text-muted-foreground opacity-0 group-hover/message:opacity-100 transition-opacity"
-                              onClick={() => {
-                                setMode('edit');
-                              }}
-                            >
-                              <PencilEditIcon />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Edit message</TooltipContent>
-                        </Tooltip>
-                      )}
-
-                      <div
-                        data-testid="message-content"
-                        className={cn('flex flex-col gap-4 w-full', {
-                          'bg-gradient-to-br from-galaxy-blue-light to-galaxy-blue text-white px-4 py-3 rounded-2xl shadow-galaxy-message transition-transform hover:scale-[1.01] duration-200':
-                            message.role === 'user',
-                          'bg-gradient-to-br from-white via-galaxy-light to-galaxy-gray border border-galaxy-light px-4 py-3 rounded-2xl shadow-galaxy-message hover:shadow-galaxy-hover transition-all duration-200':
-                            message.role === 'assistant',
-                        })}
-                      >
+                return (
+                  <div key={key} className="flex flex-row gap-2 items-start">
+                    <div
+                      data-testid="message-content"
+                      className={cn('flex flex-col gap-4 w-full', {
+                        'bg-gradient-to-br from-galaxy-blue-light to-galaxy-blue text-white px-4 py-3 rounded-2xl shadow-galaxy-message transition-transform hover:scale-[1.01] duration-200':
+                          message.role === 'user',
+                        'bg-gradient-to-br from-white via-galaxy-light to-galaxy-gray border border-galaxy-light px-4 py-3 rounded-2xl shadow-galaxy-message hover:shadow-galaxy-hover transition-all duration-200':
+                          message.role === 'assistant',
+                      })}
+                    >
+                      {message.role === 'user' ? (
+                        <div className="whitespace-normal break-words">{part.text}</div>
+                      ) : (
                         <Markdown>{part.text}</Markdown>
-                      </div>
+                      )}
                     </div>
-                  );
-                }
-
-                if (mode === 'edit') {
-                  return (
-                    <div key={key} className="flex flex-row gap-2 items-start">
-                      <div className="size-8" />
-
-                      <MessageEditor
-                        key={message.id}
-                        message={message}
-                        setMode={setMode}
-                        setMessages={setMessages}
-                        reload={reload}
-                      />
-                    </div>
-                  );
-                }
+                  </div>
+                );
               }
 
               if (type === 'tool-invocation') {
@@ -392,29 +357,11 @@ const PurePreviewMessage = ({
               return null;
             })}
             
-            {/* 스트리밍 중이 아니고 완전히 로드된 일반 메시지 컨텐츠 */}
-            {!message.parts && message.content && mode === 'view' && (
+            {/* parts가 없는 경우 content를 사용하여 표시 */}
+            {(!message.parts || message.parts.length === 0) && message.content && (
               <div className="flex flex-row gap-2 items-start">
-                {message.role === 'user' && !isReadonly && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        data-testid="message-edit-button"
-                        variant="ghost"
-                        className="px-2 h-fit rounded-full text-muted-foreground opacity-0 group-hover/message:opacity-100 transition-opacity"
-                        onClick={() => {
-                          setMode('edit');
-                        }}
-                      >
-                        <PencilEditIcon />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Edit message</TooltipContent>
-                  </Tooltip>
-                )}
-
                 <div
-                  data-testid="message-content"
+                  data-testid="message-content-fallback"
                   className={cn('flex flex-col gap-4 w-full', {
                     'bg-gradient-to-br from-galaxy-blue-light to-galaxy-blue text-white px-4 py-3 rounded-2xl shadow-galaxy-message transition-transform hover:scale-[1.01] duration-200':
                       message.role === 'user',
@@ -422,17 +369,13 @@ const PurePreviewMessage = ({
                       message.role === 'assistant',
                   })}
                 >
-                  <Markdown>{message.content}</Markdown>
+                  {message.role === 'user' ? (
+                    <div className="whitespace-normal break-words">{message.content}</div>
+                  ) : (
+                    <Markdown>{message.content}</Markdown>
+                  )}
                 </div>
               </div>
-            )}
-            
-            {/* 메시지에 이미지가 있으면 이미지 갤러리 표시 - 여러 이미지를 모두 표시하도록 수정 */}
-            {message.role === 'assistant' && (
-              <>
-                {/* 모든 이미지 소스(api, 블록, 텍스트)에서 이미지를 함께 표시 */}
-                <MergedImagesDisplay message={message} />
-              </>
             )}
             
             {!isReadonly && (
@@ -442,6 +385,7 @@ const PurePreviewMessage = ({
                 message={message}
                 vote={vote}
                 isLoading={isLoading}
+                messageIndex={messageIndex}
               />
             )}
           </div>
@@ -637,104 +581,3 @@ function normalizeImageUrl(url: string): string {
   
   return url;
 }
-
-// 모든 소스에서 이미지를 병합하여 표시하는 새 컴포넌트
-const MergedImagesDisplay = ({ message }: { message: MessageWithImages }) => {
-  const [allImages, setAllImages] = useState<ImageData[]>([]);
-  const [isProcessed, setIsProcessed] = useState(false);
-  
-  useEffect(() => {
-    if (isProcessed) return;
-    
-    console.log("▶️ MergedImagesDisplay 실행 시작 - 메시지 ID:", message.id);
-    console.log("👀 메시지 내용:", message.content?.substring(0, 100));
-    console.log("🖼️ 메시지에 포함된 이미지 배열:", message.images?.length || 0);
-    console.log("📝 메시지에 포함된 이미지 블록:", message.imageBlocks?.length || 0);
-    console.log("🔍 메시지 내용에 [이미지] 패턴 포함:", message.content?.includes('[이미지') || false);
-    console.log("🔗 메시지 내용에 Supabase URL 포함:", message.content?.includes('supabase.co') || false);
-    
-    // 모든 이미지 소스에서 이미지 수집
-    const mergedImages: ImageData[] = [];
-    const addedUrls = new Set<string>();
-    
-    // 1. API에서 직접 제공한 이미지 추가
-    if (message.images && message.images.length > 0) {
-      message.images.forEach(img => {
-        if (!addedUrls.has(img.url)) {
-          mergedImages.push(img);
-          addedUrls.add(img.url);
-        }
-      });
-    }
-    
-    // 2. 이미지 블록에서 추출한 이미지 추가
-    if (message.imageBlocks && message.imageBlocks.length > 0) {
-      message.imageBlocks.forEach(block => {
-        // 이미지 URL 추출 로직 (Supabase URL 등)
-        // 기존 함수와 함께 새로운 함수도 사용
-        const blockImages = extractImagesFromText(block);
-        blockImages.forEach(img => {
-          if (!addedUrls.has(img.url)) {
-            mergedImages.push(img);
-            addedUrls.add(img.url);
-          }
-        });
-        
-        // 추가: 새로운 패턴 추출 함수 사용
-        const additionalImages = extractAllImagePatterns(block);
-        additionalImages.forEach(img => {
-          if (!addedUrls.has(img.url)) {
-            mergedImages.push(img);
-            addedUrls.add(img.url);
-          }
-        });
-      });
-    }
-    
-    // 3. 텍스트 내용에서 직접 URL 추출 (이미지 패턴 사용)
-    if (message.content) {
-      // 기존 방식: extractImagesFromText 사용
-      const contentImages = extractImagesFromText(message.content);
-      contentImages.forEach(img => {
-        if (!addedUrls.has(img.url)) {
-          mergedImages.push(img);
-          addedUrls.add(img.url);
-        }
-      });
-      
-      // 추가: 새로운 패턴 추출 함수 사용
-      const additionalImages = extractAllImagePatterns(message.content);
-      additionalImages.forEach(img => {
-        if (!addedUrls.has(img.url)) {
-          mergedImages.push(img);
-          addedUrls.add(img.url);
-        }
-      });
-    }
-    
-    console.log("✅ 총 병합된 이미지 수:", mergedImages.length);
-    if (mergedImages.length > 0) {
-      console.log("📸 첫 번째 이미지 URL:", mergedImages[0].url);
-      mergedImages.forEach((img, idx) => {
-        console.log(`  🖼️ 이미지 ${idx + 1}:`, img.url);
-      });
-    }
-    
-    setAllImages(mergedImages);
-    setIsProcessed(true);
-  }, [message.content, message.id, message.imageBlocks, message.images, isProcessed]);
-
-  // 실제 렌더링 부분
-  if (allImages.length === 0) {
-    console.log("⚠️ 표시할 이미지가 없습니다.");
-    return null;
-  }
-  
-  console.log(`🖼️🖼️🖼️ 이미지 ${allImages.length}개 렌더링 시작`);
-  
-  return (
-    <div className="mt-4">
-      <ChatImageGallery images={allImages} />
-    </div>
-  );
-};

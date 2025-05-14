@@ -12,10 +12,11 @@ export const PreviewAttachment = ({
   const { name, url, contentType } = attachment;
   const [imageSrc, setImageSrc] = useState(url);
   const [isError, setIsError] = useState(false);
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
 
   // 디버깅용 로깅
   useEffect(() => {
-    console.log('첨부파일 렌더링:', { 
+    console.log('첨부파일 렌더링 시도:', { 
       타입: contentType, 
       URL: url,
       이름: name
@@ -26,6 +27,23 @@ export const PreviewAttachment = ({
     console.error('이미지 로드 실패:', url);
     setIsError(true);
   };
+
+  const handleImageLoad = () => {
+    console.log('이미지 로드 성공:', url);
+    setIsImageLoaded(true);
+  };
+
+  // URL이 비어 있거나 유효하지 않은 경우 렌더링하지 않음
+  if (!url || url === 'undefined' || url === 'null' || url.trim() === '') {
+    console.log('첨부파일 건너뜀: 유효하지 않은 URL', url);
+    return null;
+  }
+  
+  // 컨텐츠 타입이 없거나 유효하지 않은 경우 체크
+  if (!contentType) {
+    console.log('첨부파일 건너뜀: 컨텐츠 타입 없음', url);
+    return null;
+  }
 
   return (
     <div data-testid="input-attachment-preview" className="flex flex-col gap-2 w-full">
@@ -44,6 +62,7 @@ export const PreviewAttachment = ({
               className="rounded-lg max-w-full"
               style={{ maxHeight: '400px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
               onError={handleImageError}
+              onLoad={handleImageLoad}
             />
           )}
         </div>

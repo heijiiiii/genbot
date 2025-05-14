@@ -20,7 +20,9 @@ const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
           ...options?.headers,
           'Family-Preference': 'IPv4',
           'apikey': SUPABASE_SERVICE_ROLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
       });
     }
@@ -58,17 +60,17 @@ const getUserIdMapping = async (nextAuthId: string, chatId?: string) => {
       }
     }
     
-    // 기본 매핑 확인 (chat_id가 NULL)
-    const { data: mapping, error: mappingError } = await client
+    // 사용자의 모든 매핑 확인 (chat_id에 관계없이)
+    const { data: mappings, error: mappingError } = await client
       .from('user_mappings')
       .select('supabase_id')
-      .eq('next_auth_id', nextAuthId)
-      .is('chat_id', null)
-      .single();
+      .eq('next_auth_id', nextAuthId);
 
-    if (!mappingError && mapping && mapping.supabase_id) {
-      console.log(`매핑 테이블에서 ID 찾음: ${nextAuthId} -> ${mapping.supabase_id}`);
-      return mapping.supabase_id;
+    if (!mappingError && mappings && mappings.length > 0) {
+      // 첫 번째 매핑 사용
+      const firstMapping = mappings[0];
+      console.log(`매핑 테이블에서 ID 찾음: ${nextAuthId} -> ${firstMapping.supabase_id}`);
+      return firstMapping.supabase_id;
     }
 
     // 매핑이 없으면 기본 ID 목록 사용
@@ -151,7 +153,8 @@ export async function GET(request: NextRequest) {
 
   if (!session?.user?.id) {
     console.log("오류: 인증되지 않은 사용자");
-    return Response.json('Unauthorized!', { status: 401 });
+    // 비로그인 사용자에게는 빈 응답을 반환 (401 대신)
+    return Response.json({ chats: [], hasMore: false });
   }
   
   // 게스트 사용자는 대화 이력을 보지 않음
@@ -255,7 +258,7 @@ export async function GET(request: NextRequest) {
     } else {
       console.log('채팅 기록이 없습니다.');
     }
-
+    
     const hasMore = chats ? chats.length > limit : false;
     const slicedChats = hasMore ? chats.slice(0, limit) : chats || [];
 
@@ -263,8 +266,10 @@ export async function GET(request: NextRequest) {
       chats: slicedChats.map((chat) => ({
         id: chat.id,
         title: chat.title,
+        created_at: chat.created_at,
         createdAt: chat.created_at,
         userId: chat.user_id,
+        user_id: chat.user_id,
         visibility: 'private',
       })),
       hasMore,

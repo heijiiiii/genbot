@@ -5,11 +5,11 @@ import { TEST_PROMPTS } from '../prompts/routes';
 const chatIdsCreatedByAda: Array<string> = [];
 
 test.describe
-  .serial('/api/chat', () => {
+  .serial('/api/chat-proxy', () => {
     test('Ada cannot invoke a chat generation with empty request body', async ({
       adaContext,
     }) => {
-      const response = await adaContext.request.post('/api/chat', {
+      const response = await adaContext.request.post('/api/chat-proxy', {
         data: JSON.stringify({}),
       });
       expect(response.status()).toBe(400);
@@ -21,7 +21,7 @@ test.describe
     test('Ada can invoke chat generation', async ({ adaContext }) => {
       const chatId = generateUUID();
 
-      const response = await adaContext.request.post('/api/chat', {
+      const response = await adaContext.request.post('/api/chat-proxy', {
         data: {
           id: chatId,
           message: TEST_PROMPTS.SKY.MESSAGE,
@@ -44,7 +44,7 @@ test.describe
     }) => {
       const [chatId] = chatIdsCreatedByAda;
 
-      const response = await babbageContext.request.post('/api/chat', {
+      const response = await babbageContext.request.post('/api/chat-proxy', {
         data: {
           id: chatId,
           message: TEST_PROMPTS.GRASS.MESSAGE,
@@ -61,7 +61,7 @@ test.describe
       const [chatId] = chatIdsCreatedByAda;
 
       const response = await babbageContext.request.delete(
-        `/api/chat?id=${chatId}`,
+        `/api/chat-proxy?id=${chatId}`,
       );
       expect(response.status()).toBe(403);
 
@@ -73,7 +73,7 @@ test.describe
       const [chatId] = chatIdsCreatedByAda;
 
       const response = await adaContext.request.delete(
-        `/api/chat?id=${chatId}`,
+        `/api/chat-proxy?id=${chatId}`,
       );
       expect(response.status()).toBe(200);
 

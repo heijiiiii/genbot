@@ -1167,9 +1167,45 @@ export const WarningIcon = ({ size = 16 }: { size?: number }) => {
       <path
         fillRule="evenodd"
         clipRule="evenodd"
-        d="M8.55846 0.5C9.13413 0.5 9.65902 0.829456 9.90929 1.34788L15.8073 13.5653C16.1279 14.2293 15.6441 15 14.9068 15H1.09316C0.355835 15 -0.127943 14.2293 0.192608 13.5653L6.09065 1.34787C6.34092 0.829454 6.86581 0.5 7.44148 0.5H8.55846ZM8.74997 4.75V5.5V8V8.75H7.24997V8V5.5V4.75H8.74997ZM7.99997 12C8.55226 12 8.99997 11.5523 8.99997 11C8.99997 10.4477 8.55226 10 7.99997 10C7.44769 10 6.99997 10.4477 6.99997 11C6.99997 11.5523 7.44769 12 7.99997 12Z"
+        d="M8 0C3.58 0 0 3.58 0 8C0 12.42 3.58 16 8 16C12.42 16 16 12.42 16 8C16 3.58 12.42 0 8 0ZM8 1.5C11.59 1.5 14.5 4.41 14.5 8C14.5 11.59 11.59 14.5 8 14.5C4.41 14.5 1.5 11.59 1.5 8C1.5 4.41 4.41 1.5 8 1.5ZM8 9.5C8.55228 9.5 9 9.05228 9 8.5V4.5C9 3.94772 8.55228 3.5 8 3.5C7.44772 3.5 7 3.94772 7 4.5V8.5C7 9.05228 7.44772 9.5 8 9.5ZM8 12.5C8.82843 12.5 9.5 11.8284 9.5 11C9.5 10.1716 8.82843 9.5 8 9.5C7.17157 9.5 6.5 10.1716 6.5 11C6.5 11.8284 7.17157 12.5 8 12.5Z"
         fill="currentColor"
       />
     </svg>
   );
 };
+
+export const LoginIcon = ({ size = 16, className = '' }: { size?: number; className?: string }) => (
+  <svg
+    height={size}
+    strokeLinejoin="round"
+    viewBox="0 0 16 16"
+    width={size}
+    style={{ color: 'currentcolor' }}
+    className={className}
+  >
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M9 1.5H13C13.8284 1.5 14.5 2.17157 14.5 3V13C14.5 13.8284 13.8284 14.5 13 14.5H9V16H13C14.6569 16 16 14.6569 16 13V3C16 1.34315 14.6569 0 13 0H9V1.5ZM10.75 5.5V8H1.75C1.33579 8 1 8.33579 1 8.75C1 9.16421 1.33579 9.5 1.75 9.5H10.75V12.5L15.25 9L10.75 5.5Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+export const LogoutIcon = ({ size = 16, className = '' }: { size?: number; className?: string }) => (
+  <svg
+    height={size}
+    strokeLinejoin="round"
+    viewBox="0 0 16 16"
+    width={size}
+    style={{ color: 'currentcolor' }}
+    className={className}
+  >
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M1.5 3C1.5 2.17157 2.17157 1.5 3 1.5H9V0H3C1.34315 0 0 1.34315 0 3V13C0 14.6569 1.34315 16 3 16H9V14.5H3C2.17157 14.5 1.5 13.8284 1.5 13V3ZM11.75 5.5V8H4.75C4.33579 8 4 8.33579 4 8.75C4 9.16421 4.33579 9.5 4.75 9.5H11.75V12.5L16.25 9L11.75 5.5Z"
+      fill="currentColor"
+    />
+  </svg>
+);

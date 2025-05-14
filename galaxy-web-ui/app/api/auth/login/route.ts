@@ -20,7 +20,9 @@ const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
           ...options?.headers,
           'Family-Preference': 'IPv4', // 이 헤더는 프록시나 서버 설정에 따라 작동할 수 있음
           'apikey': SUPABASE_SERVICE_ROLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
       });
     }
@@ -125,7 +127,15 @@ const saveUserIdMapping = async (nextAuthId: string, supabaseId: string, chatId?
 // 로그인 API 핸들러
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, supabaseId, chatId } = await request.json();
+    const body = await request.json();
+    const { email, password, supabaseId, chatId } = body;
+    
+    console.log("로그인/매핑 API 호출 수신:", { 
+      이메일: email || '없음', 
+      chatId: chatId || '없음', 
+      supabaseId: supabaseId || '없음' 
+    });
+    
     const session = await auth();
     
     if (!session?.user?.id) {
@@ -133,17 +143,40 @@ export async function POST(request: NextRequest) {
     }
     
     const nextAuthId = session.user.id;
+    console.log(`인증된 사용자 ID: ${nextAuthId}`);
     
-    // ID 매핑 저장 (chatId 포함)
-    if (supabaseId) {
-      await saveUserIdMapping(nextAuthId, supabaseId, chatId);
-    } else {
-      console.log('supabaseId가 제공되지 않아 매핑을 저장하지 않습니다');
+    // chatId가 제공된 경우, 사용자 ID를 직접 supabaseId로 사용하여 매핑 저장
+    if (chatId) {
+      // supabaseId가 없거나 빈 문자열이면 nextAuthId 사용
+      const effectiveSupabaseId = supabaseId && supabaseId !== '없음' ? supabaseId : nextAuthId;
+      console.log(`채팅 ID ${chatId}에 대한 매핑 저장 시도. supabaseId: ${effectiveSupabaseId}`);
+      await saveUserIdMapping(nextAuthId, effectiveSupabaseId, chatId);
+      return Response.json({ 
+        success: true, 
+        userId: nextAuthId,
+        chatId: chatId,
+        mappingCreated: true
+      });
     }
-    
+    // 기존 로직: supabaseId가 제공된 경우의 처리
+    else if (supabaseId) {
+      await saveUserIdMapping(nextAuthId, supabaseId);
     return Response.json({ success: true, userId: nextAuthId });
+    } 
+    else {
+      console.log('supabaseId나 chatId가 제공되지 않아 매핑을 저장하지 않습니다');
+      return Response.json({ 
+        success: true, 
+        userId: nextAuthId,
+        message: '매핑 정보가 제공되지 않았습니다'
+      });
+    }
   } catch (error) {
     console.error('로그인 처리 중 오류:', error);
-    return Response.json({ success: false, message: '로그인 처리 중 오류가 발생했습니다' }, { status: 500 });
+    return Response.json({ 
+      success: false, 
+      message: '로그인 처리 중 오류가 발생했습니다',
+      error: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
 } 

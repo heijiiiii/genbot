@@ -35,9 +35,22 @@ export async function generateTitleFromUserMessage({
 
 export async function deleteTrailingMessages({ id }: { id: string }) {
   const [message] = await getMessageById({ id });
+  
+  if (!message) {
+    console.error(`메시지 ID ${id}를 찾을 수 없습니다.`);
+    return;
+  }
+
+  // chatId 또는 chat_id 속성 사용 - DB에서 반환되는 형식에 따라 다를 수 있음
+  const chatId = message.chatId || message.chat_id;
+  
+  if (!chatId) {
+    console.error(`메시지 ID ${id}에 대한 채팅 ID를 찾을 수 없습니다:`, message);
+    return;
+  }
 
   await deleteMessagesByChatIdAfterTimestamp({
-    chatId: message.chatId,
+    chatId,
     timestamp: message.createdAt,
   });
 }

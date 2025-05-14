@@ -14,3 +14,10 @@ export const DUMMY_PASSWORD = generateDummyPassword();
 
 // API URL 설정
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+// 개발 환경에서 로깅 제어 플래그
+export const ENABLE_DEV_LOGGING = isDevelopmentEnvironment && process.env.ENABLE_DEV_LOGGING !== 'false';
+
+// 세션 관련 설정
+export const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30일
+export const SESSION_UPDATE_AGE = 24 * 60 * 60; // 24시간

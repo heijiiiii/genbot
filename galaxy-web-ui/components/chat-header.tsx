@@ -7,12 +7,13 @@ import { useWindowSize } from 'usehooks-ts';
 import { ModelSelector } from '@/components/model-selector';
 import { SidebarToggle } from '@/components/sidebar-toggle';
 import { Button } from '@/components/ui/button';
-import { PlusIcon, VercelIcon } from './icons';
+import { PlusIcon, VercelIcon, LoginIcon, LogoutIcon } from './icons';
 import { useSidebar } from './ui/sidebar';
 import { memo } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { type VisibilityType, VisibilitySelector } from './visibility-selector';
 import type { Session } from 'next-auth';
+import { signOut } from 'next-auth/react';
 
 function PureChatHeader({
   chatId,
@@ -25,12 +26,51 @@ function PureChatHeader({
   selectedModelId: string;
   selectedVisibilityType: VisibilityType;
   isReadonly: boolean;
-  session: Session;
+  session: Session | null;
 }) {
   const router = useRouter();
   const { open } = useSidebar();
 
   const { width: windowWidth } = useWindowSize();
+
+  // 로그인/로그아웃 처리 함수
+  const handleLogin = () => {
+    // 즉시 실행 함수로 로그인 처리
+    (async () => {
+      try {
+        // 먼저 로그아웃 시도 (기존 세션 제거)
+        await signOut({ redirect: false });
+        console.log('[HEADER] 기존 세션 정리 완료');
+      } catch (e) {
+        console.error('[HEADER] 세션 정리 오류:', e);
+      }
+
+      // 쿠키 강제 삭제 시도
+      document.cookie = 'next-auth.session-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'; 
+      document.cookie = 'next-auth.csrf-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      document.cookie = 'next-auth.callback-url=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      document.cookie = 'authjs.session-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;'; 
+      document.cookie = 'authjs.csrf-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      document.cookie = 'authjs.callback-url=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      
+      // 로컬/세션 스토리지도 정리
+      try {
+        localStorage.removeItem('nextauth.message');
+        sessionStorage.clear();
+      } catch (e) {
+        console.error('[HEADER] 스토리지 정리 오류:', e);
+      }
+      
+      console.log('[HEADER] 로그인 버튼 클릭 - 쿠키 삭제 후 로그인 페이지로 이동');
+      
+      // 직접 URL로 이동 - 타임스탬프와 강제 파라미터 추가
+      window.location.href = '/login?force=true&t=' + Date.now();
+    })();
+  };
+
+  const handleLogout = async () => {
+    await signOut({ redirect: true, callbackUrl: '/' });
+  };
 
   return (
     <header className="flex sticky top-0 bg-gradient-to-r from-galaxy-navy via-galaxy-blue to-galaxy-purple animate-gradient-x items-center px-3 md:px-4 gap-2 shadow-galaxy z-50 h-14">
@@ -56,7 +96,7 @@ function PureChatHeader({
           </Tooltip>
         )}
 
-        {!isReadonly && (
+        {!isReadonly && session && (
           <ModelSelector
             session={session}
             selectedModelId={selectedModelId}
@@ -64,7 +104,7 @@ function PureChatHeader({
           />
         )}
 
-        {!isReadonly && (
+        {!isReadonly && session && (
           <VisibilitySelector
             chatId={chatId}
             selectedVisibilityType={selectedVisibilityType}
@@ -72,18 +112,36 @@ function PureChatHeader({
           />
         )}
 
+        {/* 로그인/로그아웃 버튼 */}
+        {!session ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
         <Button
-          className="bg-white text-galaxy-blue hover:bg-gray-100 hidden md:flex py-1.5 px-3 h-fit md:h-[34px] order-4 md:ml-auto rounded-full font-medium shadow-galaxy-hover transform hover:scale-105 transition-all duration-200 animate-slide-in-right"
-          asChild
-        >
-          <Link
-            href={`https://vercel.com/new/clone?repository-url=https://github.com/vercel/ai-chatbot&env=AUTH_SECRET&envDescription=Learn more about how to get the API Keys for the application&envLink=https://github.com/vercel/ai-chatbot/blob/main/.env.example&demo-title=AI Chatbot&demo-description=An Open-Source AI Chatbot Template Built With Next.js and the AI SDK by Vercel.&demo-url=https://chat.vercel.ai&products=[{"type":"integration","protocol":"ai","productSlug":"grok","integrationSlug":"xai"},{"type":"integration","protocol":"storage","productSlug":"neon","integrationSlug":"neon"},{"type":"blob"}]`}
-            target="_noblank"
+                variant="outline"
+                className="order-4 md:order-4 md:ml-auto text-white bg-white/10 hover:bg-white/20 border-white/20 backdrop-blur-sm transition-all duration-300 ease-in-out shadow-sm"
+                onClick={handleLogin}
+              >
+                <LoginIcon className="mr-1" />
+                <span className="hidden md:inline">로그인</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>로그인하여 채팅 기록 저장하기</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                className="order-4 md:order-4 md:ml-auto text-white bg-white/10 hover:bg-white/20 border-white/20 backdrop-blur-sm transition-all duration-300 ease-in-out shadow-sm"
+                onClick={handleLogout}
           >
-            <VercelIcon size={16} className="mr-1.5" />
-            Deploy with Vercel
-          </Link>
+                <LogoutIcon className="mr-1" />
+                <span className="hidden md:inline">로그아웃</span>
         </Button>
+            </TooltipTrigger>
+            <TooltipContent>로그아웃</TooltipContent>
+          </Tooltip>
+        )}
       </div>
     </header>
   );

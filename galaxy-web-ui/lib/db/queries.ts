@@ -30,30 +30,151 @@ import {
 import type { ArtifactKind } from '@/components/artifact';
 import { generateUUID } from '../utils';
 import { generateHashedPassword } from './utils';
+import { ENABLE_DEV_LOGGING } from '../constants';
 
-// Optionally, if not using email/pass login, you can
-// use the Drizzle adapter for Auth.js / NextAuth
-// https://authjs.dev/reference/adapter/drizzle
+// 글로벌 로깅 제어 (프로세스 수준)
+const globalLoggingState = {
+  hasLogged: false
+};
 
-// biome-ignore lint: Forbidden non-null assertion.
-const connectionString = process.env.POSTGRES_URL!;
+// 글로벌 인스턴스 캐싱 (프로세스 수준)
+let globalDbInstance: any = null;
 
-// 데이터베이스 연결 설정
-const client = postgres(connectionString, {
-  ssl: 'require',
-  connect_timeout: 30,
-  idle_timeout: 30,
-  max_lifetime: 60 * 30
-});
+// 싱글톤 패턴으로 데이터베이스 연결 관리
+class DatabaseConnection {
+  private static instance: DatabaseConnection;
+  private client: any;
+  private db: any;
+  private isInitialized = false;
+  private isLogged = false;
 
-const db = drizzle(client);
+  private constructor() {
+    // 이미 글로벌 인스턴스가 있으면 재사용
+    if (globalDbInstance) {
+      this.client = globalDbInstance.client;
+      this.db = globalDbInstance.db;
+      this.isInitialized = true;
+      this.isLogged = true;
+      return;
+    }
+    
+    this.initialize();
+  }
+
+  public static getInstance(): DatabaseConnection {
+    if (!DatabaseConnection.instance) {
+      DatabaseConnection.instance = new DatabaseConnection();
+    }
+    return DatabaseConnection.instance;
+  }
+
+  private initialize() {
+    if (this.isInitialized) return;
+
+    try {
+      // 데이터베이스 연결 설정
+      let connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+
+      // postgresql:// 프로토콜을 postgres://로 변경
+      if (connectionString && connectionString.startsWith('postgresql://')) {
+        connectionString = connectionString.replace('postgresql://', 'postgres://');
+        // 로그는 한 번만 출력 (개발 환경에서만, ENABLE_DEV_LOGGING이 true일 때만)
+        this.log('프로토콜을 postgres://로 변경했습니다.');
+      }
+
+      // 환경 변수 로깅 (개발 환경에서만, 로깅이 활성화되어 있을 때만)
+      this.log('환경 변수 확인:', () => {
+        console.log('- DATABASE_URL 존재:', typeof process.env.DATABASE_URL !== 'undefined');
+        console.log('- POSTGRES_URL 존재:', typeof process.env.POSTGRES_URL !== 'undefined');
+        
+        if (connectionString) {
+          const maskedUrl = connectionString.replace(/(:\/\/|:)([^:@]+)(:|@)([^:@]+)(@)/, '$1[USER]$3[PASSWORD]$5');
+          console.log('사용할 DB 연결 문자열:', maskedUrl);
+        } else {
+          console.log('⚠️ 경고: 유효한 연결 문자열을 찾을 수 없습니다.');
+        }
+      });
+
+      if (!connectionString) {
+        throw new Error('유효한 데이터베이스 연결 문자열이 없습니다.');
+      }
+
+      this.client = postgres(connectionString, {
+        ssl: { rejectUnauthorized: false },
+        connect_timeout: 30,
+        idle_timeout: 30,
+        max: 10,
+      });
+
+      this.db = drizzle(this.client);
+      this.isInitialized = true;
+      
+      // 글로벌 캐시에 저장
+      globalDbInstance = {
+        client: this.client,
+        db: this.db
+      };
+
+      // 연결 테스트 (개발 환경에서만, 로깅이 활성화되어 있을 때만)
+      if (process.env.NODE_ENV === 'development' && ENABLE_DEV_LOGGING !== false) {
+        this.testConnection();
+      }
+    } catch (error) {
+      console.error('데이터베이스 연결 초기화 오류:', error);
+      // 기본 클라이언트 생성
+      this.client = postgres('');
+      this.db = drizzle(this.client);
+    }
+  }
+
+  private async testConnection() {
+    try {
+      const result = await this.client`SELECT 1 as connection_test`;
+      this.log('✅ 데이터베이스 연결 성공:', () => console.log(result));
+    } catch (error) {
+      console.error('❌ 데이터베이스 연결 실패:', error);
+    }
+  }
+  
+  // 프로세스 수준에서 로그 중복 방지
+  private log(message: string, callback?: () => void) {
+    // 로깅이 비활성화되어 있거나 이미 로깅했으면 무시
+    if (process.env.NODE_ENV !== 'development' || 
+        ENABLE_DEV_LOGGING === false || 
+        this.isLogged || 
+        globalLoggingState.hasLogged) {
+      return;
+    }
+    
+    console.log(message);
+    if (callback) callback();
+    
+    this.isLogged = true;
+    globalLoggingState.hasLogged = true;
+  }
+
+  public getDb() {
+    return this.db;
+  }
+}
+
+// 데이터베이스 인스턴스 가져오기
+const db = DatabaseConnection.getInstance().getDb();
 
 export async function getUser(email: string): Promise<Array<User>> {
   try {
     return await db.select().from(user).where(eq(user.email, email));
   } catch (error) {
     console.error('Failed to get user from database', error);
-    throw error;
+    // 오류 세부 정보 로깅
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+    }
+    return [];
   }
 }
 
@@ -87,9 +208,10 @@ export async function saveChat({
   title: string;
 }) {
   try {
+    const now = new Date();
     return await db.insert(chat).values({
       id,
-      createdAt: new Date(),
+      createdAt: now,
       userId,
       title,
     });
@@ -188,7 +310,7 @@ export async function getChatById({ id }: { id: string }) {
     const [selectedChat] = await db.select().from(chat).where(eq(chat.id, id));
     return selectedChat;
   } catch (error) {
-    console.error('Failed to get chat by id from database');
+    console.error('Failed to get chat by id from database', error);
     throw error;
   }
 }
@@ -405,7 +527,7 @@ export async function deleteMessagesByChatIdAfterTimestamp({
         and(eq(message.chatId, chatId), gte(message.createdAt, timestamp)),
       );
 
-    const messageIds = messagesToDelete.map((message) => message.id);
+    const messageIds = messagesToDelete.map((message: { id: string }) => message.id);
 
     if (messageIds.length > 0) {
       await db
@@ -448,28 +570,29 @@ export async function getMessageCountByUserId({
   differenceInHours,
 }: { id: string; differenceInHours: number }) {
   try {
+    const now = new Date();
     const twentyFourHoursAgo = new Date(
-      Date.now() - differenceInHours * 60 * 60 * 1000,
+      now.getTime() - differenceInHours * 60 * 60 * 1000,
     );
 
-    const [stats] = await db
-      .select({ count: count(message.id) })
+    const chats = await db
+      .select({ id: chat.id })
+      .from(chat)
+      .where(eq(chat.userId, id));
+
+    const chatIds = chats.map((c: { id: string }) => c.id);
+
+    return db
+      .select({ count: count() })
       .from(message)
-      .innerJoin(chat, eq(message.chatId, chat.id))
       .where(
         and(
-          eq(chat.userId, id),
+          inArray(message.chatId, chatIds),
           gte(message.createdAt, twentyFourHoursAgo),
-          eq(message.role, 'user'),
         ),
-      )
-      .execute();
-
-    return stats?.count ?? 0;
+      );
   } catch (error) {
-    console.error(
-      'Failed to get message count by user id for the last 24 hours from database',
-    );
+    console.error('Failed to get message count by user id from database');
     throw error;
   }
 }

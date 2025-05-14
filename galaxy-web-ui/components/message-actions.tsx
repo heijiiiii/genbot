@@ -21,11 +21,13 @@ export function PureMessageActions({
   message,
   vote,
   isLoading,
+  messageIndex,
 }: {
   chatId: string;
   message: Message;
   vote: Vote | undefined;
   isLoading: boolean;
+  messageIndex?: number;
 }) {
   const { mutate } = useSWRConfig();
   const [_, copyToClipboard] = useCopyToClipboard();
@@ -60,7 +62,7 @@ export function PureMessageActions({
               <CopyIcon />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Copy</TooltipContent>
+          <TooltipContent>복사</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -71,20 +73,26 @@ export function PureMessageActions({
               disabled={vote?.isUpvoted}
               variant="outline"
               onClick={async () => {
+                console.log("좋아요 버튼 클릭 - API 호출:", { 
+                  messageIndex
+                });
+                
                 const upvote = fetch('/api/vote', {
                   method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
                   body: JSON.stringify({
-                    chatId,
-                    messageId: message.id,
+                    messageIndex,
                     type: 'up',
                   }),
                 });
 
                 toast.promise(upvote, {
-                  loading: 'Upvoting Response...',
+                  loading: '응답에 좋아요 추가 중...',
                   success: () => {
                     mutate<Array<Vote>>(
-                      `/api/vote?chatId=${chatId}`,
+                      `/api/vote`,
                       (currentVotes) => {
                         if (!currentVotes) return [];
 
@@ -104,16 +112,16 @@ export function PureMessageActions({
                       { revalidate: false },
                     );
 
-                    return 'Upvoted Response!';
+                    return '응답에 좋아요를 추가했습니다!';
                   },
-                  error: 'Failed to upvote response.',
+                  error: '좋아요 추가에 실패했습니다.',
                 });
               }}
             >
               <ThumbUpIcon />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Upvote Response</TooltipContent>
+          <TooltipContent>좋아요</TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -124,20 +132,26 @@ export function PureMessageActions({
               variant="outline"
               disabled={vote && !vote.isUpvoted}
               onClick={async () => {
+                console.log("싫어요 버튼 클릭 - API 호출:", { 
+                  messageIndex
+                });
+                
                 const downvote = fetch('/api/vote', {
                   method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
                   body: JSON.stringify({
-                    chatId,
-                    messageId: message.id,
+                    messageIndex,
                     type: 'down',
                   }),
                 });
 
                 toast.promise(downvote, {
-                  loading: 'Downvoting Response...',
+                  loading: '응답에 싫어요 추가 중...',
                   success: () => {
                     mutate<Array<Vote>>(
-                      `/api/vote?chatId=${chatId}`,
+                      `/api/vote`,
                       (currentVotes) => {
                         if (!currentVotes) return [];
 
@@ -157,16 +171,16 @@ export function PureMessageActions({
                       { revalidate: false },
                     );
 
-                    return 'Downvoted Response!';
+                    return '응답에 싫어요를 추가했습니다!';
                   },
-                  error: 'Failed to downvote response.',
+                  error: '싫어요 추가에 실패했습니다.',
                 });
               }}
             >
               <ThumbDownIcon />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>Downvote Response</TooltipContent>
+          <TooltipContent>싫어요</TooltipContent>
         </Tooltip>
       </div>
     </TooltipProvider>
