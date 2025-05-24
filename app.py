@@ -23,7 +23,8 @@ from genbot import (
     text_vectorstore, 
     image_vectorstore, 
     llm, 
-    AgentState
+    AgentState,
+    initialize_retrievers  # 초기화 함수 추가
 )
 
 # SearchDocumentsTool 클래스를 임포트하지 않고 필요한 기능만 재구현
@@ -351,6 +352,11 @@ class ImageSearchRequest(BaseModel):
     query: str
     page: Optional[str] = None
     limit: Optional[int] = 3
+
+# 앱 시작시 검색기 초기화
+print("🚀 백엔드 서버 시작 - 검색기 초기화 중...")
+initialize_retrievers()
+print("✅ 검색기 초기화 완료!")
 
 # 챗봇 대화 처리 엔드포인트
 @app.post("/chat", response_model=ChatResponse)

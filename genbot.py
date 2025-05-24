@@ -34,6 +34,17 @@ OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 COHERE_API_KEY = os.environ.get("COHERE_API_KEY", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+
+# 환경변수 유효성 검사
+if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    print(f"⚠️ Supabase 환경변수 확인 필요:")
+    print(f"SUPABASE_URL: {'✓' if SUPABASE_URL else '✗ 없음'}")
+    print(f"SUPABASE_SERVICE_ROLE_KEY: {'✓' if SUPABASE_SERVICE_ROLE_KEY else '✗ 없음'}")
+    if not SUPABASE_URL:
+        SUPABASE_URL = "https://ywvoksfszaelkceectaa.supabase.co"
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl3dm9rc2ZzemFlbGtjZWVjdGFhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NTU0ODUyMCwiZXhwIjoyMDYxMTI0NTIwfQ.KBkf30JIVTc-k0ysyZ_Fen1prSkNZe-p4c2nL6T37hE"
+
 client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 # 3. 검색기(Retriever) 설정
@@ -129,14 +140,14 @@ class BM25Wrapper:
         # 하위 호환성 유지
         return self.retriever.get_relevant_documents(query)
 
-# 실제 BM25 검색기 생성
-bm25_raw = BM25Retriever.from_texts(
-    texts=texts, 
-    metadatas=[d.metadata for d in docs], 
-    k=5)
+# 실제 BM25 검색기 생성 - 지연 초기화로 이동됨
+# bm25_raw = BM25Retriever.from_texts(
+#     texts=texts, 
+#     metadatas=[d.metadata for d in docs], 
+#     k=5)
 
-# 래퍼로 감싸기
-bm25 = BM25Wrapper(bm25_raw)
+# 래퍼로 감싸기 - 지연 초기화로 이동됨
+# bm25 = BM25Wrapper(bm25_raw)
 
 
 # 3-5. 강화된 하이브리드 검색기 정의
@@ -240,11 +251,11 @@ class EnhancedEnsembleRetriever:
         result_docs.sort(key=lambda x: x.metadata["score"], reverse=True)  # 점수 순으로 정렬
         return result_docs[:5]  # 최대 5개 결과 반환
 
-# 3-6. 하이브리드 검색기 설정
-hybrid_retriever = EnhancedEnsembleRetriever(
-    retrievers=[bm25, vector_retriever],  # 두 개의 검색기 사용
-    weights=[0.3, 0.7],  # 가중치 설정 - 벡터 검색 가중치 0.7, BM25 0.3
-    verbose=False)  # 디버깅 정보 비활성화
+# 3-6. 하이브리드 검색기 설정 - 지연 초기화로 이동됨
+# hybrid_retriever = EnhancedEnsembleRetriever(
+#     retrievers=[bm25, vector_retriever],  # 두 개의 검색기 사용
+#     weights=[0.3, 0.7],  # 가중치 설정 - 벡터 검색 가중치 0.7, BM25 0.3
+#     verbose=False)  # 디버깅 정보 비활성화
 
 # 4. OpenAI LLM 챗봇 모델 설정
 llm = ChatOpenAI(
@@ -1316,3 +1327,61 @@ def extract_pdf_path_from_url(image_url):
     except Exception as e:
         print(f"PDF 경로 추출 오류: {str(e)}")
         return None
+
+# 데이터베이스 초기화 함수 (개선됨)
+def initialize_retrievers():
+    """앱 시작시 검색기들을 초기화하는 함수"""
+    global docs, texts, bm25, hybrid_retriever
+    
+    try:
+        print("🔄 데이터베이스 연결 시작...")
+        resp = client.table("text_embeddings").select("content,metadata").execute()  # 벡터 테이블 조회
+        docs = [Document(page_content=item["content"], metadata=item.get("metadata", {})) for item in resp.data]  # 문서 리스트 생성
+        texts = [d.page_content for d in docs]  # 문서 내용 리스트 생성
+        
+        print(f"✅ 데이터베이스 연결 성공! 문서 {len(docs)}개 로드됨")
+        
+        # BM25 검색기 생성
+        if texts:
+            bm25_raw = BM25Retriever.from_texts(
+                texts=texts, 
+                metadatas=[d.metadata for d in docs], 
+                k=5)
+            bm25 = BM25Wrapper(bm25_raw)
+            print("✅ BM25 검색기 초기화 완료")
+        
+        # 하이브리드 검색기 설정
+        hybrid_retriever = EnhancedEnsembleRetriever(
+            retrievers=[bm25, vector_retriever],  # 두 개의 검색기 사용
+            weights=[0.3, 0.7],  # 가중치 설정 - 벡터 검색 가중치 0.7, BM25 0.3
+            verbose=False)  # 디버깅 정보 비활성화
+        print("✅ 하이브리드 검색기 초기화 완료")
+        
+        return docs, texts
+    except Exception as e:
+        print(f"⚠️ 데이터베이스 초기화 오류: {str(e)}")
+        # 오류 발생시 빈 데이터로 초기화
+        docs, texts = [], []
+        bm25 = None
+        hybrid_retriever = None
+        return [], []
+
+# 전역 변수 초기화 (모듈 로딩시에는 빈 값으로)
+docs, texts = [], []
+bm25 = None
+hybrid_retriever = None
+
+vector_retriever = EnhancedSupabaseRetriever(  # 기본 유사도 검색기
+    client=client,  # Supabase 클라이언트
+    embeddings=cohere_embeddings,  # 임베딩 모델
+    table_name="text_embeddings",  # 벡터 테이블 이름
+    query_name="match_text_embeddings",  # 검색 쿼리 이름
+    k=5)  # 검색 결과 수
+
+image_retriever = EnhancedSupabaseRetriever(
+    client=client,
+    embeddings=cohere_embeddings,
+    table_name="image_embeddings",
+    query_name="match_image_embeddings",
+    k=5
+)
