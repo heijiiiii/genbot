@@ -21,6 +21,8 @@ var/
 .installed.cfg
 *.egg
 venv/
+venv_genbot/
+genbot_env/
 ENV/
 
 # Next.js
@@ -31,10 +33,16 @@ galaxy-web-ui/.env.local
 galaxy-web-ui/.env.development.local
 galaxy-web-ui/.env.test.local
 galaxy-web-ui/.env.production.local
+genbot-web-ui/.next/
+genbot-web-ui/out/
+genbot-web-ui/node_modules/
+genbot-web-ui/.env.local
+genbot-web-ui/tsconfig.tsbuildinfo
 
 # IDEs and editors
 .idea/
 .vscode/
+.cursor/
 *.swp
 *.swo
 *~
@@ -42,4 +50,12 @@ galaxy-web-ui/.env.production.local
 # OS specific
 .DS_Store
 Thumbs.db
+
+# Environment and security files
 .env
+.env.local
+.env.development
+.env.production
+100.txt
+*.key
+*.pem

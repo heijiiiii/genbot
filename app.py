@@ -16,8 +16,8 @@ import platform  # 플랫폼 확인용
 if platform.system() != "Windows":
     import resource  # 리소스 사용량 모니터링
 
-# galaxy_chatbot.py의 핵심 기능 임포트
-from galaxy_chatbot import (
+# genbot.py의 핵심 기능 임포트
+from genbot import (
     cohere_embeddings, 
     hybrid_retriever, 
     text_vectorstore, 
@@ -27,13 +27,13 @@ from galaxy_chatbot import (
 )
 
 # SearchDocumentsTool 클래스를 임포트하지 않고 필요한 기능만 재구현
-from galaxy_chatbot import client, np
+from genbot import client, np
 
 # 메모리 사용량 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="갤럭시 S25 매뉴얼 챗봇 API")
+app = FastAPI(title="제네시스 G80 매뉴얼 챗봇 API")
 
 # CORS 설정 (Next.js 앱에서 API 호출 허용)
 app.add_middleware(
@@ -394,7 +394,7 @@ async def chat(request: ChatRequest):
         
         # 프롬프트 구성
         prompt = f"""
-        당신은 삼성 갤럭시 S25의 친절하고 도움이 되는 가상 도우미입니다. 
+        당신은 제네시스 G80의 친절하고 도움이 되는 가상 도우미입니다. 
         사용자의 질문에 대해 상세하고 유용한 정보를 제공하며, 필요한 경우 단계별 안내를 해주세요.
         기술적인 정보뿐만 아니라 실제 사용자가 이해하기 쉽고 도움이 되는 조언도 함께 제공해 주세요.
         친근하고 대화하듯 답변하되, 정확한 정보를 제공하는 것이 가장 중요합니다.
@@ -578,13 +578,13 @@ async def image_search(request: ImageSearchRequest):
 # 상태 확인 엔드포인트
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "message": "갤럭시 S25 챗봇 API가 정상 작동 중입니다."}
+    return {"status": "healthy", "message": "제네시스 G80 챗봇 API가 정상 작동 중입니다."}
 
 # 루트 경로 핸들러 추가
 @app.get("/")
 async def read_root():
     return {
-        "message": "갤럭시 S25 매뉴얼 챗봇 API",
+        "message": "제네시스 G80 매뉴얼 챗봇 API",
         "version": "1.0.0",
         "endpoints": {
             "chat": "/chat - POST 요청으로 챗봇과 대화",

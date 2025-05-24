@@ -1,0 +1,10 @@
+pip install python-dotenv==1.0.0
+pip install supabase==2.0.3
+pip install numpy==1.26.0
+pip install rank-bm25==0.2.2
+pip install langchain-core==0.1.16
+pip install langchain==0.0.350
+pip install langchain-openai==0.0.2
+pip install langchain-cohere==0.1.0
+pip install langgraph==0.0.22
+pip install langchain-community==0.0.17

@@ -1,4 +1,5 @@
 # 작성일자 : 2025-04-23
+# 수정일자 : 현재 일자 (제네시스 챗봇 테스트용)
 
 # 1. 필요한 라이브러리 임포트
 # 1-1. 환경 변수 라이브러리 임포트
@@ -28,6 +29,7 @@ from langgraph.graph.state import StateGraph  # 그래프 상태
 
 # 2. 환경 변수 설정
 load_dotenv()  # .env 파일 로드
+
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 COHERE_API_KEY = os.environ.get("COHERE_API_KEY", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
@@ -56,7 +58,7 @@ image_vectorstore = SupabaseVectorStore(
 
 # 3-3. Supabase 벡터 스토어 검색기 정의
 class EnhancedSupabaseRetriever:
-    def __init__(self, client, embeddings, table_name="embeddings", query_name="match_embeddings", k=5):
+    def __init__(self, client, embeddings, table_name="text_embeddings", query_name="match_text_embeddings", k=5):
         self.client = client  # Supabase 클라이언트 설정
         self.embeddings = embeddings  # 임베딩 모델 설정
         self.table_name = table_name  # 벡터 테이블 이름
@@ -97,7 +99,7 @@ class EnhancedSupabaseRetriever:
     def get_relevant_documents(self, query):  # 관련 문서 검색
         return self.invoke(query)  # 검색 결과 반환
 
-resp = client.table("embeddings").select("content,metadata").execute()  # 벡터 테이블 조회
+resp = client.table("text_embeddings").select("content,metadata").execute()  # 벡터 테이블 조회
 docs = [Document(page_content=item["content"], metadata=item.get("metadata", {})) for item in resp.data]  # 문서 리스트 생성
 texts = [d.page_content for d in docs]  # 문서 내용 리스트 생성
 
@@ -108,8 +110,34 @@ vector_retriever = EnhancedSupabaseRetriever(  # 기본 유사도 검색기
     query_name="match_text_embeddings",  # 검색 쿼리 이름
     k=5)  # 검색 결과 수
 
-# 3-4. BM25 키워드 검색기 생성
-bm25 = BM25Retriever.from_texts(texts=texts, metadatas=[d.metadata for d in docs], k=5)  # BM25 검색기
+image_retriever = EnhancedSupabaseRetriever(
+    client=client,
+    embeddings=cohere_embeddings,
+    table_name="image_embeddings",
+    query_name="match_image_embeddings",
+    k=5
+)
+
+# 3-4. BM25 키워드 검색기 생성 및 래퍼 적용
+class BM25Wrapper:
+    def __init__(self, retriever):
+        self.retriever = retriever
+    def invoke(self, query):
+        # get_relevant_documents 대신 invoke 메소드 사용(있는 경우)
+        if hasattr(self.retriever, 'invoke'):
+            return self.retriever.invoke(query)
+        # 하위 호환성 유지
+        return self.retriever.get_relevant_documents(query)
+
+# 실제 BM25 검색기 생성
+bm25_raw = BM25Retriever.from_texts(
+    texts=texts, 
+    metadatas=[d.metadata for d in docs], 
+    k=5)
+
+# 래퍼로 감싸기
+bm25 = BM25Wrapper(bm25_raw)
+
 
 # 3-5. 강화된 하이브리드 검색기 정의
 class EnhancedEnsembleRetriever:
@@ -234,7 +262,7 @@ class AgentState(MessagesState):
 # 5-2. LangGraph 에이전트 검색 정의
 class SearchDocumentsTool(BaseTool):
     name: str = "search_documents"  # 도구 이름
-    description: str = "Genesis GV80 매뉴얼에서 관련 정보를 검색합니다."  # 도구 설명
+    description: str = "제네시스 차량 매뉴얼에서 관련 정보를 검색합니다."  # 도구 설명 변경
 
     def analyze_image_relevance(self, image_url, query_text):
         try:
@@ -1014,12 +1042,12 @@ def agent_node_fn(state: AgentState):
     
     # 3) 컨텍스트가 있으면 LLM으로 최종 답변 - 프롬프트 개선
     prompt = f"""
-    당신은 ‘제네시스(Genesis) 차량 매뉴얼’에 특화된 지식을 지닌 디지털 컨시어지(가상 도우미)입니다. 
+    당신은 '제네시스(Genesis) 차량 매뉴얼'에 특화된 지식을 지닌 디지털 컨시어지(가상 도우미)입니다. 
     사용자의 질문에 대해 상세하고 유용한 정보를 제공하며, 필요한 경우 운전자 입장에서 단계별로 안내를 해주세요.
     고급 세단 브랜드다운 품격을 유지하되, 친근하고 이해하기 쉬운 어투로 설명합니다.  
     반드시 **매뉴얼 내용**과 일치하는 사실만 전달하고, 추정 · 루머는 포함하지 않습니다. 
     안전과 유지보수(정기 점검·오일 교환 등)는 **주의·경고**를 먼저 알려 줍니다.  
-    단계별 절차가 있는 경우 → **번호 목록**으로, 설정 메뉴 경로는 → **‘설정 > 차량 > …’** 형식으로 써 주세요.
+    단계별 절차가 있는 경우 → **번호 목록**으로, 설정 메뉴 경로는 → **'설정 > 차량 > …'** 형식으로 써 주세요.
 
 
     대화 맥락 유지에 관한 안내:
@@ -1141,8 +1169,8 @@ state = {"messages": [], "context": "", "conversation_history": [], "debug_info"
 config = {"configurable": {"thread_id": thread_id}}  # 스레드 ID 설정
 
 # 6. 대화형 인터페이스 실행
-if __name__ == "__Genesis_concierge__":
-    print("\n===  디지털 컨시어지지 ===")
+if __name__ == "__main__":
+    print("\n===  제네시스 디지털 컨시어지 ===")
     print("(종료: q 또는 quit)")
     print("(디버그 모드 설정: d 또는 debug)")
     print("(대화 이력 초기화: r 또는 reset)")
@@ -1161,7 +1189,7 @@ if __name__ == "__Genesis_concierge__":
             command_type = available_commands[q_lower]
             
             if command_type == "종료":
-                print("매뉴얼 도우미를 종료합니다. 좋은 하루 되세요!")
+                print("제네시스 매뉴얼 도우미를 종료합니다. 좋은 하루 되세요!")
                 break
                 
             elif command_type == "디버그":

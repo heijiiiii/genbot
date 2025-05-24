@@ -82,7 +82,7 @@
    - `app.py`: FastAPI 기반 API 서버
 
 2. **프론트엔드 (Next.js)**
-   - `galaxy-web-ui/`: Next.js 웹 애플리케이션
+   - `genbot-web-ui/`: Next.js 웹 애플리케이션
    - 반응형 UI 컴포넌트
    - 멀티모달 입력 지원
 
@@ -133,7 +133,7 @@ SUPABASE_URL=your_supabase_url_here
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
 ```
 
-### 프론트엔드 (`galaxy-web-ui/.env.local` 파일 생성)
+### 프론트엔드 (`genbot-web-ui/.env.local` 파일 생성)
 
 ```
 # API URL (배포 시 변경)
@@ -165,8 +165,8 @@ python app.py
 ### 프론트엔드
 
 ```bash
-# galaxy-web-ui 디렉토리로 이동
-cd galaxy-web-ui
+# genbot-web-ui 디렉토리로 이동
+cd genbot-web-ui
 
 # 필요한 패키지 설치
 npm install
@@ -198,7 +198,7 @@ docker run -p 8000:8000 galaxy-chatbot
 
 2. Next.js 프론트엔드 배포:
    - Render 대시보드에서 "Static Site" 생성
-   - GitHub 저장소의 `galaxy-web-ui` 디렉토리 지정
+   - GitHub 저장소의 `genbot-web-ui` 디렉토리 지정
    - 빌드 명령: `npm install && npm run build`
    - 출력 디렉토리: `out`
    - 환경 변수로 백엔드 API URL 지정
@@ -220,7 +220,7 @@ galaxy-rag-chatbot/
 ├── Dockerfile              # Docker 설정
 ├── docker-compose.yml      # Docker Compose 설정
 ├── render.yaml             # Render 배포 설정
-├── galaxy-web-ui/          # Next.js 애플리케이션
+├── genbot-web-ui/          # Next.js 애플리케이션
 │   ├── components/         # UI 컴포넌트
 │   ├── app/                # 페이지 및 라우팅
 │   ├── lib/                # 유틸리티 함수

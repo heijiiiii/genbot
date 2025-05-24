@@ -1,15 +1,17 @@
 import { Toaster } from 'sonner';
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Geist, Geist_Mono, Noto_Sans_KR, Montserrat } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { SidebarProvider } from '@/components/ui/sidebar';
 
 import './globals.css';
 import { SessionProvider } from 'next-auth/react';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://chat.vercel.ai'),
-  title: '갤럭시 S25 도우미',
-  description: '갤럭시 S25 사용자를 위한 AI 챗봇 도우미',
+  title: 'Genesis G80 도우미',
+  description: 'Genesis G80 사용자를 위한 AI 챗봇 도우미',
   icons: {
     icon: '/icon.svg',
     shortcut: '/icon.svg',
@@ -31,6 +33,20 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-geist-mono',
+});
+
+const notoSansKR = Noto_Sans_KR({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '700'],
+  display: 'swap',
+  variable: '--font-noto-sans-kr',
+});
+
+const montserrat = Montserrat({
+  subsets: ['latin'],
+  weight: ['300', '400', '500', '600', '700'],
+  display: 'swap',
+  variable: '--font-montserrat',
 });
 
 const LIGHT_THEME_COLOR = '#1A237E'; // 갤럭시 테마 색상으로 변경
@@ -66,7 +82,7 @@ export default async function RootLayout({
       // prop is necessary to avoid the React hydration mismatch warning.
       // https://github.com/pacocoursey/next-themes?tab=readme-ov-file#with-app
       suppressHydrationWarning
-      className={`${geist.variable} ${geistMono.variable}`}
+      className={`${geist.variable} ${geistMono.variable} ${notoSansKR.variable} ${montserrat.variable}`}
     >
       <head>
         <script
@@ -76,21 +92,25 @@ export default async function RootLayout({
         />
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
       </head>
-      <body className="antialiased">
+      <body className="antialiased font-['Montserrat','Helvetica_Neue',Arial,sans-serif]">
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          <Toaster position="top-center" />
-          <SessionProvider 
-            refetchInterval={0} 
-            refetchOnWindowFocus={false} 
-            refetchWhenOffline={false}
-          >
-            {children}
-          </SessionProvider>
+          <SidebarProvider defaultOpen={false}>
+            <TooltipProvider>
+              <Toaster position="top-center" />
+              <SessionProvider 
+                refetchInterval={0} 
+                refetchOnWindowFocus={false} 
+                refetchWhenOffline={false}
+              >
+                {children}
+              </SessionProvider>
+            </TooltipProvider>
+          </SidebarProvider>
         </ThemeProvider>
       </body>
     </html>

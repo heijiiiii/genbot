@@ -5,10 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useWindowSize } from 'usehooks-ts';
 
 import { ModelSelector } from '@/components/model-selector';
-import { SidebarToggle } from '@/components/sidebar-toggle';
 import { Button } from '@/components/ui/button';
 import { PlusIcon, VercelIcon, LoginIcon, LogoutIcon } from './icons';
-import { useSidebar } from './ui/sidebar';
 import { memo } from 'react';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { type VisibilityType, VisibilitySelector } from './visibility-selector';
@@ -29,8 +27,6 @@ function PureChatHeader({
   session: Session | null;
 }) {
   const router = useRouter();
-  const { open } = useSidebar();
-
   const { width: windowWidth } = useWindowSize();
 
   // 로그인/로그아웃 처리 함수
@@ -73,28 +69,24 @@ function PureChatHeader({
   };
 
   return (
-    <header className="flex sticky top-0 bg-gradient-to-r from-galaxy-navy via-galaxy-blue to-galaxy-purple animate-gradient-x items-center px-3 md:px-4 gap-2 shadow-galaxy z-50 h-14">
+    <header className="flex sticky top-0 bg-gradient-to-r from-[#FF0235] to-[#FF0235] items-center px-3 md:px-4 gap-2 shadow-md z-50 h-14">
       <div className="flex items-center gap-2 w-full">
-        <SidebarToggle />
-
-        {(!open || windowWidth < 768) && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                className="order-2 md:order-1 md:px-2 px-2 md:h-fit ml-auto md:ml-0 text-white bg-white/10 hover:bg-white/20 border-white/20 backdrop-blur-sm transition-all duration-300 ease-in-out shadow-sm animate-pulse-slow"
-                onClick={() => {
-                  router.push('/');
-                  router.refresh();
-                }}
-              >
-                <PlusIcon />
-                <span className="md:sr-only">New Chat</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>New Chat</TooltipContent>
-          </Tooltip>
-        )}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              className="order-2 md:order-1 md:px-2 px-2 md:h-fit ml-auto md:ml-0 text-white bg-white/10 hover:bg-white/20 border-white/20 backdrop-blur-sm transition-all duration-300 ease-in-out shadow-sm"
+              onClick={() => {
+                router.push('/');
+                router.refresh();
+              }}
+            >
+              <PlusIcon />
+              <span className="md:sr-only">New Chat</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>New Chat</TooltipContent>
+        </Tooltip>
 
         {!isReadonly && session && (
           <ModelSelector
@@ -116,7 +108,7 @@ function PureChatHeader({
         {!session ? (
           <Tooltip>
             <TooltipTrigger asChild>
-        <Button
+              <Button
                 variant="outline"
                 className="order-4 md:order-4 md:ml-auto text-white bg-white/10 hover:bg-white/20 border-white/20 backdrop-blur-sm transition-all duration-300 ease-in-out shadow-sm"
                 onClick={handleLogin}
@@ -134,10 +126,10 @@ function PureChatHeader({
                 variant="outline"
                 className="order-4 md:order-4 md:ml-auto text-white bg-white/10 hover:bg-white/20 border-white/20 backdrop-blur-sm transition-all duration-300 ease-in-out shadow-sm"
                 onClick={handleLogout}
-          >
+              >
                 <LogoutIcon className="mr-1" />
                 <span className="hidden md:inline">로그아웃</span>
-        </Button>
+              </Button>
             </TooltipTrigger>
             <TooltipContent>로그아웃</TooltipContent>
           </Tooltip>
